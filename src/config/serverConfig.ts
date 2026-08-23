@@ -1,4 +1,5 @@
 import dotenv from "dotenv";
+import type { SignOptions } from "jsonwebtoken";
 
 dotenv.config();
 
@@ -16,10 +17,10 @@ const serverConfig  = {
   jwtRefreshSecret: process.env.JWT_REFRESH_SECRET!,
 
   accessTokenExpiresIn:
-    process.env.ACCESS_TOKEN_EXPIRES_IN || "15m",
+    process.env.ACCESS_TOKEN_EXPIRES_IN as SignOptions["expiresIn"] || "15m",
 
   refreshTokenExpiresIn:
-    process.env.REFRESH_TOKEN_EXPIRES_IN || "7d",
+    process.env.REFRESH_TOKEN_EXPIRES_IN as SignOptions["expiresIn"] || "7d",
 };
 
 export default serverConfig;
