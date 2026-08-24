@@ -15,6 +15,7 @@ import {
 } from "../../utils/jwt";
 import { LoginInput, RegisterInput } from "./auth.types";
 import { AppError } from "../../utils/error";
+import statusCodes from "../../utils/statusCodes";
 
 //REGISTER SERVICE
 const register = async (input: RegisterInput) => {
@@ -71,7 +72,7 @@ const login = async (input:LoginInput) => {
       throw new AppError(
         messages.INVALID_CREDENTIALS,
         "INVALID_CREDENTIALS",
-        401
+         statusCodes.UNAUTHORIZED
       );
     }
 
@@ -84,7 +85,7 @@ const login = async (input:LoginInput) => {
       throw new AppError(
         messages.INVALID_CREDENTIALS,
         "INVALID_CREDENTIALS",
-        401
+         statusCodes.UNAUTHORIZED
       );
     }
 
@@ -94,7 +95,7 @@ const login = async (input:LoginInput) => {
       throw new AppError(
         messages.ORGANIZATION_MEMBERSHIP_NOT_FOUND,
         "ORGANIZATION_MEMBERSHIP_NOT_FOUND",
-        403
+        statusCodes.FORBIDDEN
       );
     }
 
@@ -143,7 +144,7 @@ const refresh = async (refreshToken: string) => {
       throw new AppError(
         messages.MISSING_REFRESH_TOKEN,
         "MISSING_REFRESH_TOKEN",
-        400
+        statusCodes.BAD_REQUEST
       );
     }
 
@@ -157,7 +158,7 @@ const refresh = async (refreshToken: string) => {
       throw new AppError(
         messages.INVALID_REFRESH_TOKEN,
         "INVALID_REFRESH_TOKEN",
-        401
+        statusCodes.UNAUTHORIZED
       );
     }
 
@@ -175,7 +176,7 @@ const refresh = async (refreshToken: string) => {
       throw new AppError(
         messages.INVALID_REFRESH_TOKEN,
         "INVALID_REFRESH_TOKEN",
-        401
+         statusCodes.UNAUTHORIZED
       );
     }
 
@@ -184,7 +185,7 @@ const refresh = async (refreshToken: string) => {
       throw new AppError(
         messages.INVALID_REFRESH_TOKEN,
         "INVALID_REFRESH_TOKEN",
-        401
+         statusCodes.UNAUTHORIZED
       );
     }
 
@@ -193,7 +194,7 @@ const refresh = async (refreshToken: string) => {
       throw new AppError(
         messages.REFRESH_TOKEN_EXPIRED,
         "REFRESH_TOKEN_EXPIRED",
-        401
+         statusCodes.UNAUTHORIZED
       );
     }
 
@@ -202,7 +203,7 @@ const refresh = async (refreshToken: string) => {
       throw new AppError(
         messages.INVALID_REFRESH_TOKEN,
         "INVALID_REFRESH_TOKEN",
-        401
+         statusCodes.UNAUTHORIZED
       );
     }
 
@@ -216,7 +217,7 @@ const refresh = async (refreshToken: string) => {
       throw new AppError(
         messages.INVALID_CREDENTIALS,
         "INVALID_CREDENTIALS",
-        401
+        statusCodes.UNAUTHORIZED
       );
     }
 
@@ -226,7 +227,7 @@ const refresh = async (refreshToken: string) => {
       throw new AppError(
         messages.ORGANIZATION_MEMBERSHIP_NOT_FOUND,
         "ORGANIZATION_MEMBERSHIP_NOT_FOUND",
-        403
+        statusCodes.FORBIDDEN
       );
     }
 
@@ -287,7 +288,7 @@ const logout = async (refreshToken: string) => {
       throw new AppError(
         messages.MISSING_REFRESH_TOKEN,
         "MISSING_REFRESH_TOKEN",
-        400
+         statusCodes.BAD_REQUEST
       );
     }
 

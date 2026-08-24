@@ -10,7 +10,9 @@ const messages = {
   ORGANIZATION_MEMBERSHIP_NOT_FOUND : "Organization membership not found",
   MISSING_REFRESH_TOKEN :"Missing refresh token",
   INVALID_REFRESH_TOKEN : "Invalid refresh token",
-  REFRESH_TOKEN_EXPIRED : "Refresh token has been expired"
+  REFRESH_TOKEN_EXPIRED : "Refresh token has been expired",
+  PROJECT_DELETED : "Project deleted successfully",
+  PROJECT_NOT_FOUND : "Project not found"
 };
 
 export default  messages;

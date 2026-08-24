@@ -5,17 +5,14 @@ import {
 } from "express";
 
 import { verifyAccessToken } from "../utils/jwt";
-import  prisma  from "../db/prisma";
+import prisma from "../db/prisma";
 import { AppError } from "../utils/error";
 import { OrgRole } from "@prisma/client";
 
-export interface AuthenticatedRequest
-  extends Request {
-  user: {
-    id: string;
-    organizationId: string;
-    role: OrgRole;
-  };
+export interface AuthUser {
+  id: string;
+  organizationId: string;
+  role: OrgRole;
 }
 
 export async function authMiddleware(
@@ -24,8 +21,7 @@ export async function authMiddleware(
   next: NextFunction
 ) {
   try {
-    const header =
-      req.headers.authorization;
+    const header = req.headers.authorization;
 
     if (!header?.startsWith("Bearer ")) {
       throw new AppError(
@@ -35,8 +31,7 @@ export async function authMiddleware(
       );
     }
 
-    const token =
-      header.substring(7);
+    const token = header.substring(7);
 
     let payload;
 
@@ -54,8 +49,7 @@ export async function authMiddleware(
       await prisma.orgMember.findFirst({
         where: {
           userId: payload.sub,
-          organizationId:
-            payload.organizationId,
+          organizationId: payload.organizationId,
         },
       });
 
@@ -67,12 +61,9 @@ export async function authMiddleware(
       );
     }
 
-    (
-      req as AuthenticatedRequest
-    ).user = {
+    req.user = {
       id: payload.sub,
-      organizationId:
-        membership.organizationId,
+      organizationId: membership.organizationId,
       role: membership.role,
     };
 

@@ -1,25 +1,4 @@
-import { Request, Response, NextFunction } from "express";
-import { z, ZodSchema } from "zod";
-
-// ====================
-// Generic Zod Validator
-// ====================
-
-export const validate = (schema: ZodSchema) => {
-  return (
-    req: Request,
-    _res: Response,
-    next: NextFunction
-  ) => {
-    try {
-      req.body = schema.parse(req.body);
-
-      next();
-    } catch (error) {
-      next(error);
-    }
-  };
-};
+import { z } from "zod";
 
 // Register Validation
 export const registerSchema = z.object({

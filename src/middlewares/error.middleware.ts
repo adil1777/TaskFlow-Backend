@@ -14,7 +14,7 @@ export function errorMiddleware(
   res: Response,
   _next: NextFunction
 ) {
-  console.error(error);
+  console.error("Error [errorMiddleware]: " ,error);
 
   if (error instanceof AppError) {
     return res.status(error.statusCode).json({
