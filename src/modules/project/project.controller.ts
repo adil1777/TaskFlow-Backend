@@ -6,7 +6,6 @@ import {
 
 import  projectService from "./project.service";
 import statusCodes from "../../utils/statusCodes";
-import { CreateProjectInput, PaginationInput, ProjectIdInput, UpdateProjectInput } from "./project.types";
 import messages from "../../utils/messages";
 
 

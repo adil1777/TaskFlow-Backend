@@ -61,16 +61,11 @@ export default router;
 
 
 
-// import { Router } from "express";
-// import projectController from "./project.controller";
-// import { authMiddleware } from "../../middlewares/auth.middleware";
-// import { requireRole } from "../../middlewares/rbac.middleware";
-// import { validate } from "../../middlewares/validate.middleware";
-// import { createProjectSchema, paginationSchema } from "./project.validation";
 
-// const router = Router();
 
-// router.use(authMiddleware);
+
+
+
 
 // router.post(
 //   "/",
@@ -84,20 +79,6 @@ export default router;
 //   projectController.getProjects
 // );
 
-// router.get(
-//   "/:id",
-//   projectController.getProjectById
-// );
 
-// router.patch(
-//   "/:id",
-//   projectController.updateProject
-// );
 
-// router.delete(
-//   "/:id",
-//   requireRole("org_admin"),
-//   projectController.deleteProject
-// );
 
-// export default router;

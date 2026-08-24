@@ -12,7 +12,16 @@ const messages = {
   INVALID_REFRESH_TOKEN : "Invalid refresh token",
   REFRESH_TOKEN_EXPIRED : "Refresh token has been expired",
   PROJECT_DELETED : "Project deleted successfully",
-  PROJECT_NOT_FOUND : "Project not found"
+  PROJECT_NOT_FOUND : "Project not found",
+  TASK_CREATED_SUCCESS : "Task created successfully",
+  TASKS_FETCHED : "Tasks fetched Successfully",
+  TASK_FETCHED : "Task fetched Successfully",
+  TASK_UPDATED : "Task update successfully",
+  TASK_DELETED :"Task deleted successfully",
+  TASK_ASSIGNED : "Task assigned successfully",
+  TASK_UNASSIGNED :"Task unassigned successfully",
+  TASK_NOT_FOUND :"Task not found",
+   ASSIGNMENT_NOT_FOUND :"Task assignment not found",
 };
 
 export default  messages;
