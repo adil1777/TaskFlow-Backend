@@ -8,6 +8,7 @@ import { verifyAccessToken } from "../utils/jwt";
 import prisma from "../db/prisma";
 import { AppError } from "../utils/error";
 import { OrgRole } from "@prisma/client";
+import statusCodes from "../utils/statusCodes";
 
 export interface AuthUser {
   id: string;
@@ -27,7 +28,7 @@ export async function authMiddleware(
       throw new AppError(
         "Authentication required",
         "UNAUTHORIZED",
-        401
+        statusCodes.UNAUTHORIZED
       );
     }
 
@@ -41,7 +42,7 @@ export async function authMiddleware(
       throw new AppError(
         "Invalid or expired access token",
         "INVALID_ACCESS_TOKEN",
-        401
+       statusCodes.UNAUTHORIZED
       );
     }
 
@@ -57,7 +58,7 @@ export async function authMiddleware(
       throw new AppError(
         "Organization membership not found",
         "MEMBERSHIP_NOT_FOUND",
-        403
+        statusCodes.FORBIDDEN
       );
     }
 
