@@ -7,7 +7,7 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
-    "start": "node dist/server.js",
+    "start": "node dist/src/server.js",
     "db:format": "prisma format",
     "db:validate": "prisma validate",
     "db:generate": "prisma generate",
@@ -16,7 +16,7 @@
     "db:studio": "prisma studio",
     "db:seed": "prisma db seed",
     "worker": "tsx src/workers/notification.worker.ts",
-    "start:worker": "node dist/workers/notification.worker.js",
+    "start:worker": "node dist/src/workers/notification.worker.js",
     "prepare": "husky"
   },
   "lint-staged": {
