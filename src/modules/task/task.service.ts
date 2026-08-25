@@ -231,7 +231,11 @@ const getAuthorizedProject = async (
     const project = await taskRepository.findProjectById(projectId);
 
     if (!project || project.deletedAt) {
-      throw new AppError('Project not found', 'PROJECT_NOT_FOUND', 404);
+      throw new AppError(
+        'Project not found',
+        'PROJECT_NOT_FOUND',
+        statusCodes.NOT_FOUND
+      );
     }
 
     if (project.organizationId !== organizationId) {
