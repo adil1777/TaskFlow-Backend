@@ -14,7 +14,13 @@
     "db:migrate": "prisma migrate dev",
     "db:status": "prisma migrate status",
     "db:studio": "prisma studio",
-    "db:seed": "prisma db seed"
+    "db:seed": "prisma db seed",
+    "worker": "tsx src/workers/notification.worker.ts",
+    "start:worker": "node dist/workers/notification.worker.js",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx,json,css,md}": "prettier --write"
   },
   "keywords": [],
   "author": "",
@@ -42,6 +48,9 @@
     "@types/node": "^26.2.0",
     "@types/pg": "^8.23.1",
     "@types/supertest": "^7.2.1",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.3.0",
+    "prettier": "^3.9.6",
     "supertest": "^7.2.2",
     "tsx": "^4.23.12",
     "vitest": "^4.1.11"

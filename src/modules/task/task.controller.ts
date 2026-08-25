@@ -1,35 +1,26 @@
-import {
-  Request,
-  Response,
-  NextFunction,
-} from "express";
+import { Request, Response, NextFunction } from 'express';
 
-import taskService from "./task.service";
-import statusCodes from "../../utils/statusCodes";
-import messages from "../../utils/messages";
-import { TaskFilterInput } from "./task.types";
-import { taskFilterSchema } from "./task.validation";
-import { parseTaskFilters } from "../../utils/task.parser";
+import taskService from './task.service';
+import statusCodes from '../../utils/statusCodes';
+import messages from '../../utils/messages';
+import { TaskFilterInput } from './task.types';
+import { taskFilterSchema } from './task.validation';
+import { parseTaskFilters } from '../../utils/task.parser';
 
 //CREATE TASK
-const createTask = async(
-  req: Request,
-  res: Response,
-  next: NextFunction
-)=> {
+const createTask = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const user = req.user!;
 
-    const task =
-      await taskService.createTask(
-        user.organizationId,
-        req.params.projectId as string,
-        req.body
-      );
+    const task = await taskService.createTask(
+      user.organizationId,
+      req.params.projectId as string,
+      req.body
+    );
 
     res.status(statusCodes.CREATED).json({
       success: true,
-      message : messages.TASK_CREATED_SUCCESS,
+      message: messages.TASK_CREATED_SUCCESS,
       data: task,
     });
   } catch (error) {
@@ -38,26 +29,21 @@ const createTask = async(
 };
 
 //GET TASKS WITH FILTERS
-const getTasks = async(
-  req: Request,
-  res: Response,
-  next: NextFunction
-)=> {
+const getTasks = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const user = req.user!;
 
-   const filters = parseTaskFilters(req.query);
-    
-    const result =
-      await taskService.getTasks(
-        user.organizationId,
-        req.params.projectId as string,
-        filters,
-      );
+    const filters = parseTaskFilters(req.query);
+
+    const result = await taskService.getTasks(
+      user.organizationId,
+      req.params.projectId as string,
+      filters
+    );
 
     res.status(statusCodes.OK).json({
       success: true,
-      message : messages.TASKS_FETCHED,
+      message: messages.TASKS_FETCHED,
       ...result,
     });
   } catch (error) {
@@ -66,23 +52,18 @@ const getTasks = async(
 };
 
 //GET TASK BY ID
-const getTaskById = async(
-  req: Request,
-  res: Response,
-  next: NextFunction
-)=> {
+const getTaskById = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const user = req.user!;
 
-    const task =
-      await taskService.getTaskById(
-        user.organizationId,
-        req.params.id as string
-      );
+    const task = await taskService.getTaskById(
+      user.organizationId,
+      req.params.id as string
+    );
 
     res.status(statusCodes.OK).json({
       success: true,
-      message:messages.TASK_FETCHED,
+      message: messages.TASK_FETCHED,
       data: task,
     });
   } catch (error) {
@@ -91,24 +72,19 @@ const getTaskById = async(
 };
 
 //UPDATE TASK
-const updateTask = async(
-  req: Request,
-  res: Response,
-  next: NextFunction
-)=> {
+const updateTask = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const user = req.user!;
 
-    const task =
-      await taskService.updateTask(
-        user.organizationId,
-        req.params.id as string,
-        req.body
-      );
+    const task = await taskService.updateTask(
+      user.organizationId,
+      req.params.id as string,
+      req.body
+    );
 
     res.status(statusCodes.OK).json({
       success: true,
-      message : messages.TASK_UPDATED,
+      message: messages.TASK_UPDATED,
       data: task,
     });
   } catch (error) {
@@ -117,23 +93,18 @@ const updateTask = async(
 };
 
 //DELETE TASK
-const deleteTask = async(
-  req: Request,
-  res: Response,
-  next: NextFunction
-)=> {
+const deleteTask = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const user = req.user!;
 
-    const result =
-      await taskService.deleteTask(
-        user.organizationId,
-        req.params.id as string
-      );
+    const result = await taskService.deleteTask(
+      user.organizationId,
+      req.params.id as string
+    );
 
     res.status(statusCodes.OK).json({
       success: true,
-      message :messages.TASK_DELETED,
+      message: messages.TASK_DELETED,
       data: result,
     });
   } catch (error) {
@@ -142,24 +113,20 @@ const deleteTask = async(
 };
 
 //ASSIGN TASK
-const assignTask = async(
-  req: Request,
-  res: Response,
-  next: NextFunction
-)=> {
+const assignTask = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const user = req.user!;
 
-    const assignment =
-      await taskService.assignTask(
-        user.organizationId,
-        req.params.id as string,
-        req.body
-      );
+    const assignment = await taskService.assignTask(
+      user.organizationId,
+      req.params.id as string,
+      user.id,
+      req.body
+    );
 
     res.status(statusCodes.CREATED).json({
       success: true,
-      message :messages.TASK_ASSIGNED,
+      message: messages.TASK_ASSIGNED,
       data: assignment,
     });
   } catch (error) {
@@ -168,44 +135,42 @@ const assignTask = async(
 };
 
 //UNASSIGNED TASK
-const unassignTask = async(
+const unassignTask = async (
   req: Request,
   res: Response,
   next: NextFunction
-)=>{
+) => {
   try {
     const user = req.user!;
 
-      await taskService.unassignTask(
-        user.organizationId,
-        req.params.id as string,
-        req.params.userId as string
-      );
+    await taskService.unassignTask(
+      user.organizationId,
+      req.params.id as string,
+      req.params.userId as string
+    );
 
     res.status(statusCodes.OK).json({
       success: true,
-      message : messages.TASK_UNASSIGNED,
+      message: messages.TASK_UNASSIGNED,
     });
-
   } catch (error) {
     next(error);
   }
 };
 
 //PROJECT DASHBOARD with task counts grouped by status
-const getDashboard = async(
+const getDashboard = async (
   req: Request,
   res: Response,
   next: NextFunction
-)=> {
+) => {
   try {
     const user = req.user!;
 
-    const dashboard =
-      await taskService.getProjectDashboard(
-        user.organizationId,
-        req.params.projectId as string
-      );
+    const dashboard = await taskService.getProjectDashboard(
+      user.organizationId,
+      req.params.projectId as string
+    );
 
     res.status(statusCodes.OK).json({
       success: true,
@@ -224,6 +189,5 @@ export default {
   deleteTask,
   assignTask,
   unassignTask,
-  getDashboard
+  getDashboard,
 };
-

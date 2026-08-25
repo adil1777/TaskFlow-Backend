@@ -1,16 +1,13 @@
-import { Priority, Status } from "@prisma/client";
-import prisma from "../../db/prisma";
+import { Priority, Status } from '@prisma/client';
+import prisma from '../../db/prisma';
 import {
   CreateTaskInput,
   TaskFilterInput,
   UpdateTaskInput,
-} from "./task.types";
+} from './task.types';
 
 // CREATE TASK
-const createTask = async (
-  projectId: string,
-  input: CreateTaskInput
-) => {
+const createTask = async (projectId: string, input: CreateTaskInput) => {
   return prisma.task.create({
     data: {
       projectId,
@@ -24,19 +21,9 @@ const createTask = async (
 };
 
 // GET TASKS
-const findTasks = async (
-  projectId: string,
-  filters: TaskFilterInput
-) => {
-  const {
-    page,
-    limit,
-    status,
-    priority,
-    assignee,
-    dueDateFrom,
-    dueDateTo,
-  } = filters;
+const findTasks = async (projectId: string, filters: TaskFilterInput) => {
+  const { page, limit, status, priority, assignee, dueDateFrom, dueDateTo } =
+    filters;
 
   const skip = (page - 1) * limit;
 
@@ -73,37 +60,36 @@ const findTasks = async (
     }),
   };
 
-  const [tasks, total] =
-    await prisma.$transaction([
-      prisma.task.findMany({
-        where,
+  const [tasks, total] = await prisma.$transaction([
+    prisma.task.findMany({
+      where,
 
-        include: {
-          assignments: {
-            include: {
-              user: {
-                select: {
-                  id: true,
-                  name: true,
-                  email: true,
-                },
+      include: {
+        assignments: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
               },
             },
           },
         },
+      },
 
-        orderBy: {
-          createdAt: "desc",
-        },
+      orderBy: {
+        createdAt: 'desc',
+      },
 
-        skip,
-        take: limit,
-      }),
+      skip,
+      take: limit,
+    }),
 
-      prisma.task.count({
-        where,
-      }),
-    ]);
+    prisma.task.count({
+      where,
+    }),
+  ]);
 
   return {
     data: tasks,
@@ -114,9 +100,7 @@ const findTasks = async (
 };
 
 // FIND TASK BY ID
-const findTaskById = async (
-  taskId: string
-) => {
+const findTaskById = async (taskId: string) => {
   return prisma.task.findUnique({
     where: {
       id: taskId,
@@ -152,10 +136,7 @@ const findTaskById = async (
 };
 
 // UPDATE TASK
-const updateTask = async (
-  taskId: string,
-  input: UpdateTaskInput
-) => {
+const updateTask = async (taskId: string, input: UpdateTaskInput) => {
   return prisma.task.update({
     where: {
       id: taskId,
@@ -186,9 +167,7 @@ const updateTask = async (
 };
 
 // DELETE TASK
-const softDeleteTask = async (
-  taskId: string
-) => {
+const softDeleteTask = async (taskId: string) => {
   return prisma.task.update({
     where: {
       id: taskId,
@@ -214,10 +193,7 @@ const findOrganizationMember = async (
 };
 
 // CREATE ASSIGNMENT
-const createAssignment = async (
-  taskId: string,
-  userId: string
-) => {
+const createAssignment = async (taskId: string, userId: string) => {
   return prisma.taskAssignment.create({
     data: {
       taskId,
@@ -244,10 +220,7 @@ const createAssignment = async (
 };
 
 // FIND ASSIGNMENT
-const findAssignment = async (
-  taskId: string,
-  userId: string
-) => {
+const findAssignment = async (taskId: string, userId: string) => {
   return prisma.taskAssignment.findUnique({
     where: {
       taskId_userId: {
@@ -259,26 +232,21 @@ const findAssignment = async (
 };
 
 // DELETE ASSIGNMENT
-const deleteAssignment = async (
-  taskId: string,
-  userId: string
-) => {
+const deleteAssignment = async (taskId: string, assigneeId: string) => {
   return prisma.taskAssignment.delete({
     where: {
       taskId_userId: {
         taskId,
-        userId,
+        userId: assigneeId,
       },
     },
   });
 };
 
 // TASK DASHBOARD
-const getTaskDashboard = async (
-  projectId: string
-) => {
+const getTaskDashboard = async (projectId: string) => {
   return prisma.task.groupBy({
-    by: ["status"],
+    by: ['status'],
 
     where: {
       projectId,
@@ -292,9 +260,7 @@ const getTaskDashboard = async (
 };
 
 //FIND PROJECT BY ID
-const findProjectById = async (
-  projectId: string
-) => {
+const findProjectById = async (projectId: string) => {
   return prisma.project.findUnique({
     where: {
       id: projectId,

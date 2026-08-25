@@ -1,14 +1,15 @@
-import { AppError } from "../../utils/error";
-import messages from "../../utils/messages";
-import statusCodes from "../../utils/statusCodes";
-import taskRepository from "./task.repository";
+import { notificationQueue } from '../../queues/notification.queue';
+import { AppError } from '../../utils/error';
+import messages from '../../utils/messages';
+import statusCodes from '../../utils/statusCodes';
+import taskRepository from './task.repository';
 
 import {
   CreateTaskInput,
   TaskFilterInput,
   UpdateTaskInput,
   AssignTaskInput,
-} from "./task.types";
+} from './task.types';
 
 // CREATE TASK
 const createTask = async (
@@ -17,15 +18,9 @@ const createTask = async (
   input: CreateTaskInput
 ) => {
   try {
-    await getAuthorizedProject(
-      organizationId,
-      projectId
-    );
+    await getAuthorizedProject(organizationId, projectId);
 
-    return await taskRepository.createTask(
-      projectId,
-      input
-    );
+    return await taskRepository.createTask(projectId, input);
   } catch (error) {
     throw error;
   }
@@ -38,46 +33,31 @@ const getTasks = async (
   filters: TaskFilterInput
 ) => {
   try {
-    await getAuthorizedProject(
-      organizationId,
-      projectId
-    );
+    await getAuthorizedProject(organizationId, projectId);
 
-    return await taskRepository.findTasks(
-      projectId,
-      filters
-    );
+    return await taskRepository.findTasks(projectId, filters);
   } catch (error) {
     throw error;
   }
 };
 
 // GET TASK BY ID
-const getTaskById = async (
-  organizationId: string,
-  taskId: string
-) => {
+const getTaskById = async (organizationId: string, taskId: string) => {
   try {
-    const task =
-      await taskRepository.findTaskById(
-        taskId
-      );
+    const task = await taskRepository.findTaskById(taskId);
 
     if (!task || task.deletedAt) {
       throw new AppError(
         messages.TASK_NOT_FOUND,
-        "TASK_NOT_FOUND",
+        'TASK_NOT_FOUND',
         statusCodes.NOT_FOUND
       );
     }
 
-    if (
-      task.project.organizationId !==
-      organizationId
-    ) {
+    if (task.project.organizationId !== organizationId) {
       throw new AppError(
-        "You do not have access to this task",
-        "FORBIDDEN",
+        'You do not have access to this task',
+        'FORBIDDEN',
         statusCodes.FORBIDDEN
       );
     }
@@ -95,34 +75,20 @@ const updateTask = async (
   input: UpdateTaskInput
 ) => {
   try {
-    await getTaskById(
-      organizationId,
-      taskId
-    );
+    await getTaskById(organizationId, taskId);
 
-    return await taskRepository.updateTask(
-      taskId,
-      input
-    );
+    return await taskRepository.updateTask(taskId, input);
   } catch (error) {
     throw error;
   }
 };
 
 // DELETE TASK
-const deleteTask = async (
-  organizationId: string,
-  taskId: string
-) => {
+const deleteTask = async (organizationId: string, taskId: string) => {
   try {
-    await getTaskById(
-      organizationId,
-      taskId
-    );
+    await getTaskById(organizationId, taskId);
 
-    await taskRepository.softDeleteTask(
-      taskId
-    );
+    await taskRepository.softDeleteTask(taskId);
 
     return {
       message: messages.TASK_DELETED,
@@ -136,34 +102,71 @@ const deleteTask = async (
 const assignTask = async (
   organizationId: string,
   taskId: string,
+  assignedBy: string,
   input: AssignTaskInput
 ) => {
-  try {
-    await getTaskById(
-      organizationId,
-      taskId
+  //Verify task belongs to organization
+  await getTaskById(organizationId, taskId);
+
+  // Verify assignee belongs to organization
+  const member = await taskRepository.findOrganizationMember(
+    organizationId,
+    input.assigneeId
+  );
+
+  if (!member) {
+    throw new AppError(
+      'User does not belong to this organization',
+      'USER_NOT_IN_ORGANIZATION',
+      statusCodes.FORBIDDEN
     );
+  }
 
-    const member =
-      await taskRepository.findOrganizationMember(
-        organizationId,
-        input.userId
-      );
+  // Persist assignment
+  const assignment = await taskRepository.createAssignment(
+    taskId,
+    input.assigneeId
+  );
 
-    if (!member) {
-      throw new AppError(
-        "User does not belong to this organization",
-        "USER_NOT_IN_ORGANIZATION",
-         statusCodes.FORBIDDEN
-      );
+  try {
+    // Enqueue notification
+    const job = await notificationQueue.add('task-assigned', {
+      assignmentId: assignment.id,
+
+      taskId: assignment.task.id,
+
+      taskTitle: assignment.task.title,
+
+      userId: assignment.user.id,
+
+      userEmail: assignment.user.email,
+
+      userName: assignment.user.name,
+
+      assignedBy,
+    });
+
+    // Both operations succeeded
+    return {
+      assignment,
+      jobId: job.id,
+    };
+  } catch (error) {
+    //Queue failed → rollback DB assignment
+    try {
+      await taskRepository.deleteAssignment(assignment.id, input.assigneeId);
+    } catch (rollbackError) {
+      console.error('[ASSIGNMENT] Failed to rollback assignment', {
+        assignmentId: assignment.id,
+        rollbackError,
+      });
     }
 
-    return await taskRepository.createAssignment(
-      taskId,
-      input.userId
+    throw new AppError(
+      'Failed to queue task notification',
+      'NOTIFICATION_QUEUE_FAILED',
+      statusCodes.INTERNAL_SERVER_ERROR
     );
-  } catch (error) {
-    throw error;
   }
 };
 
@@ -171,33 +174,22 @@ const assignTask = async (
 const unassignTask = async (
   organizationId: string,
   taskId: string,
-  userId: string
+  assigneeId: string
 ) => {
   try {
-    await getTaskById(
-      organizationId,
-      taskId
-    );
+    await getTaskById(organizationId, taskId);
 
-    const assignment =
-      await taskRepository.findAssignment(
-        taskId,
-        userId
-      );
+    const assignment = await taskRepository.findAssignment(taskId, assigneeId);
 
     if (!assignment) {
       throw new AppError(
-         messages.ASSIGNMENT_NOT_FOUND,
-        "ASSIGNMENT_NOT_FOUND",
-         statusCodes.BAD_REQUEST
+        messages.ASSIGNMENT_NOT_FOUND,
+        'ASSIGNMENT_NOT_FOUND',
+        statusCodes.BAD_REQUEST
       );
     }
 
-    await taskRepository.deleteAssignment(
-      taskId,
-      userId
-    );
-    
+    await taskRepository.deleteAssignment(taskId, assigneeId);
   } catch (error) {
     throw error;
   }
@@ -209,15 +201,9 @@ const getProjectDashboard = async (
   projectId: string
 ) => {
   try {
-    await getAuthorizedProject(
-      organizationId,
-      projectId
-    );
+    await getAuthorizedProject(organizationId, projectId);
 
-    const result =
-      await taskRepository.getTaskDashboard(
-        projectId
-      );
+    const result = await taskRepository.getTaskDashboard(projectId);
 
     const dashboard = {
       todo: 0,
@@ -227,8 +213,7 @@ const getProjectDashboard = async (
     };
 
     for (const item of result) {
-      dashboard[item.status] =
-        item._count._all;
+      dashboard[item.status] = item._count._all;
     }
 
     return dashboard;
@@ -243,26 +228,16 @@ const getAuthorizedProject = async (
   projectId: string
 ) => {
   try {
-    const project =
-      await taskRepository.findProjectById(
-        projectId
-      );
+    const project = await taskRepository.findProjectById(projectId);
 
     if (!project || project.deletedAt) {
-      throw new AppError(
-        "Project not found",
-        "PROJECT_NOT_FOUND",
-        404
-      );
+      throw new AppError('Project not found', 'PROJECT_NOT_FOUND', 404);
     }
 
-    if (
-      project.organizationId !==
-      organizationId
-    ) {
+    if (project.organizationId !== organizationId) {
       throw new AppError(
-        "You do not have access to this project",
-        "FORBIDDEN",
+        'You do not have access to this project',
+        'FORBIDDEN',
         403
       );
     }
