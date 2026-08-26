@@ -268,6 +268,23 @@ const findProjectById = async (projectId: string) => {
   });
 };
 
+//FIND TASK WITH ORGANIZATION
+const findTaskWithOrganization = async (taskId: string) => {
+  return prisma.task.findUnique({
+    where: {
+      id: taskId,
+    },
+
+    include: {
+      project: {
+        select: {
+          organizationId: true,
+        },
+      },
+    },
+  });
+};
+
 export default {
   createTask,
   findTasks,
@@ -280,4 +297,5 @@ export default {
   deleteAssignment,
   getTaskDashboard,
   findProjectById,
+  findTaskWithOrganization,
 };
