@@ -16,8 +16,8 @@ The backend is deployed on Render.
 **Base URL:**  
 https://taskflow-backend-nqwe.onrender.com
 
-**Heath Check Api:** 
-https://taskflow-backend-nqwe.onrender.com/health
+**Health Check API:**  
+[https://taskflow-backend-nqwe.onrender.com/health](https://taskflow-backend-nqwe.onrender.com/health)
 
 
 ---
@@ -1041,6 +1041,22 @@ TaskFlow-Backend/
 ├── .gitignore
 └── README.md
 ```
+
+---
+
+# 🔮 Future Improvements
+
+Potential improvements for a larger production environment:
+
+- Transactional Outbox Pattern
+- Refresh-token rotation
+- Logout from all devices
+- Global email rate limiting
+- Comprehensive integration and end-to-end tests
+- Swagger / OpenAPI documentation
+- Real email provider integration
+- Monitoring and centralized logging
+- Distributed tracing
 
 ---
 
