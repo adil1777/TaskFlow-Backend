@@ -1,23 +1,143 @@
 services:
   postgres:
-    image: postgres:16
+    image: postgres:16-alpine
     container_name: taskflow-postgres
-    restart: unless-stopped
+
     environment:
-      POSTGRES_DB: taskflow
       POSTGRES_USER: taskflow
       POSTGRES_PASSWORD: taskflow
+      POSTGRES_DB: taskflow
+
     ports:
       - "5432:5432"
+
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U taskflow -d taskflow"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   redis:
-    image: redis:7
+    image: redis:7-alpine
     container_name: taskflow-redis
-    restart: unless-stopped
+
     ports:
       - "6379:6379"
 
+    volumes:
+      - redis_data:/data
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "redis-cli",
+          "ping"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: taskflow-api
+
+    environment:
+      DATABASE_URL: postgresql://taskflow:taskflow@postgres:5432/taskflow
+      REDIS_URL: redis://redis:6379
+
+    ports:
+      - "5000:5000"
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: taskflow-worker
+
+    command:
+      [
+        "node",
+        "dist/workers/notification.worker.js"
+      ]
+
+    environment:
+      DATABASE_URL: postgresql://taskflow:taskflow@postgres:5432/taskflow
+      REDIS_URL: redis://redis:6379
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+      redis:
+        condition: service_healthy
+
 volumes:
   postgres_data:
+  redis_data:
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# services:
+#   postgres:
+#     image: postgres:16
+#     container_name: taskflow-postgres
+#     restart: unless-stopped
+#     environment:
+#       POSTGRES_DB: taskflow
+#       POSTGRES_USER: taskflow
+#       POSTGRES_PASSWORD: taskflow
+#     ports:
+#       - "5432:5432"
+#     volumes:
+#       - postgres_data:/var/lib/postgresql/data
+
+#   redis:
+#     image: redis:7
+#     container_name: taskflow-redis
+#     restart: unless-stopped
+#     ports:
+#       - "6379:6379"
+
+# volumes:
+#   postgres_data:
