@@ -76,7 +76,7 @@ services:
     command:
       [
         "node",
-        "dist/workers/notification.worker.js"
+        "dist/src/workers/notification.worker.js"
       ]
 
     environment:

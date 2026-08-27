@@ -2,7 +2,7 @@
 # BUILD STAGE
 # ================================
 
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 
@@ -24,7 +24,7 @@ RUN npm run build
 # PRODUCTION STAGE
 # ================================
 
-FROM node:20-alpine
+FROM node:22-alpine
 
 WORKDIR /app
 
@@ -32,7 +32,7 @@ ENV NODE_ENV=production
 
 COPY package*.json ./
 
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev --ignore-scripts
 
 COPY --from=builder /app/dist ./dist
 
@@ -41,4 +41,4 @@ COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 
 EXPOSE 5000
 
-CMD ["node", "dist/server.js"]
+CMD ["node", "dist/src/server.js"]
