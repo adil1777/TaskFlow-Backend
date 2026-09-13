@@ -1,46 +1,36 @@
-import crypto from "crypto";
-import authRepository from "./auth.repository";
-import messages from "../../utils/messages";
+import crypto from 'crypto';
+import authRepository from './auth.repository';
+import messages from '../../utils/messages';
 
-import {
-  comparePassword,
-  hashPassword,
-} from "../../utils/password";
+import { comparePassword, hashPassword } from '../../utils/password';
 
 import {
   generateAccessToken,
   generateRefreshToken,
   hashRefreshToken,
   verifyRefreshToken,
-} from "../../utils/jwt";
-import { LoginInput, RegisterInput } from "./auth.types";
-import { AppError } from "../../utils/error";
-import statusCodes from "../../utils/statusCodes";
+} from '../../utils/jwt';
+import { LoginInput, RegisterInput } from './auth.types';
+import { AppError } from '../../utils/error';
+import statusCodes from '../../utils/statusCodes';
 
 //REGISTER SERVICE
 const register = async (input: RegisterInput) => {
   try {
+    const existingUser = await authRepository.findUserByEmail(input.email);
 
-    const existingUser =
-      await authRepository.findUserByEmail(input.email);
-
-     if (existingUser) {
-      throw new AppError(
-        messages.USER_EXISTS,
-        "USER_EXISTS",
-        409
-      );
+    if (existingUser) {
+      throw new AppError(messages.USER_EXISTS, 'USER_EXISTS', 409);
     }
 
     const passwordHash = await hashPassword(input.password);
 
-    const result =
-      await authRepository.createOrganizationWithAdmin({
-        organizationName: input.organizationName,
-        name: input.name,
-        email: input.email,
-        passwordHash,
-      });
+    const result = await authRepository.createOrganizationWithAdmin({
+      organizationName: input.organizationName,
+      name: input.name,
+      email: input.email,
+      passwordHash,
+    });
 
     return {
       user: {
@@ -60,19 +50,15 @@ const register = async (input: RegisterInput) => {
 };
 
 //LOGIN SERVICE
-const login = async (input:LoginInput) => {
+const login = async (input: LoginInput) => {
   try {
+    const user = await authRepository.findUserWithMemberships(input.email);
 
-    const user =
-      await authRepository.findUserWithMemberships(
-        input.email
-      );
-
-     if (!user) {
+    if (!user) {
       throw new AppError(
         messages.INVALID_CREDENTIALS,
-        "INVALID_CREDENTIALS",
-         statusCodes.UNAUTHORIZED
+        'INVALID_CREDENTIALS',
+        statusCodes.UNAUTHORIZED
       );
     }
 
@@ -84,17 +70,17 @@ const login = async (input:LoginInput) => {
     if (!passwordValid) {
       throw new AppError(
         messages.INVALID_CREDENTIALS,
-        "INVALID_CREDENTIALS",
-         statusCodes.UNAUTHORIZED
+        'INVALID_CREDENTIALS',
+        statusCodes.UNAUTHORIZED
       );
     }
 
     const membership = user.memberships[0];
 
-     if (!membership) {
+    if (!membership) {
       throw new AppError(
         messages.ORGANIZATION_MEMBERSHIP_NOT_FOUND,
-        "ORGANIZATION_MEMBERSHIP_NOT_FOUND",
+        'ORGANIZATION_MEMBERSHIP_NOT_FOUND',
         statusCodes.FORBIDDEN
       );
     }
@@ -117,9 +103,7 @@ const login = async (input:LoginInput) => {
     // Hash refresh token before storing in DB
     const tokenHash = hashRefreshToken(refreshToken);
 
-    const expiresAt = new Date(
-      Date.now() + 7 * 24 * 60 * 60 * 1000
-    );
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
     await authRepository.createRefreshToken({
       id: tokenId,
@@ -129,6 +113,17 @@ const login = async (input:LoginInput) => {
     });
 
     return {
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+      },
+
+      organization: {
+        id: membership.organizationId,
+        role: membership.role,
+      },
+
       accessToken,
       refreshToken,
     };
@@ -143,7 +138,7 @@ const refresh = async (refreshToken: string) => {
     if (!refreshToken) {
       throw new AppError(
         messages.MISSING_REFRESH_TOKEN,
-        "MISSING_REFRESH_TOKEN",
+        'MISSING_REFRESH_TOKEN',
         statusCodes.BAD_REQUEST
       );
     }
@@ -152,31 +147,26 @@ const refresh = async (refreshToken: string) => {
     let payload;
 
     try {
-      payload =
-        verifyRefreshToken(refreshToken);
+      payload = verifyRefreshToken(refreshToken);
     } catch {
       throw new AppError(
         messages.INVALID_REFRESH_TOKEN,
-        "INVALID_REFRESH_TOKEN",
+        'INVALID_REFRESH_TOKEN',
         statusCodes.UNAUTHORIZED
       );
     }
 
     // Hash token to search DB
-    const tokenHash =
-      hashRefreshToken(refreshToken);
+    const tokenHash = hashRefreshToken(refreshToken);
 
     // Find stored refresh token
-    const storedToken =
-      await authRepository.findRefreshToken(
-        tokenHash
-      );
+    const storedToken = await authRepository.findRefreshToken(tokenHash);
 
     if (!storedToken) {
       throw new AppError(
         messages.INVALID_REFRESH_TOKEN,
-        "INVALID_REFRESH_TOKEN",
-         statusCodes.UNAUTHORIZED
+        'INVALID_REFRESH_TOKEN',
+        statusCodes.UNAUTHORIZED
       );
     }
 
@@ -184,8 +174,8 @@ const refresh = async (refreshToken: string) => {
     if (storedToken.revokedAt) {
       throw new AppError(
         messages.INVALID_REFRESH_TOKEN,
-        "INVALID_REFRESH_TOKEN",
-         statusCodes.UNAUTHORIZED
+        'INVALID_REFRESH_TOKEN',
+        statusCodes.UNAUTHORIZED
       );
     }
 
@@ -193,8 +183,8 @@ const refresh = async (refreshToken: string) => {
     if (storedToken.expiresAt < new Date()) {
       throw new AppError(
         messages.REFRESH_TOKEN_EXPIRED,
-        "REFRESH_TOKEN_EXPIRED",
-         statusCodes.UNAUTHORIZED
+        'REFRESH_TOKEN_EXPIRED',
+        statusCodes.UNAUTHORIZED
       );
     }
 
@@ -202,21 +192,18 @@ const refresh = async (refreshToken: string) => {
     if (storedToken.userId !== payload.sub) {
       throw new AppError(
         messages.INVALID_REFRESH_TOKEN,
-        "INVALID_REFRESH_TOKEN",
-         statusCodes.UNAUTHORIZED
+        'INVALID_REFRESH_TOKEN',
+        statusCodes.UNAUTHORIZED
       );
     }
 
     // Get user with memberships
-    const user =
-      await authRepository.findUserWithMembershipsById(
-        payload.sub
-      );
+    const user = await authRepository.findUserWithMembershipsById(payload.sub);
 
     if (!user) {
       throw new AppError(
         messages.INVALID_CREDENTIALS,
-        "INVALID_CREDENTIALS",
+        'INVALID_CREDENTIALS',
         statusCodes.UNAUTHORIZED
       );
     }
@@ -226,42 +213,32 @@ const refresh = async (refreshToken: string) => {
     if (!membership) {
       throw new AppError(
         messages.ORGANIZATION_MEMBERSHIP_NOT_FOUND,
-        "ORGANIZATION_MEMBERSHIP_NOT_FOUND",
+        'ORGANIZATION_MEMBERSHIP_NOT_FOUND',
         statusCodes.FORBIDDEN
       );
     }
 
     // Generate new access token
-    const accessToken =
-      generateAccessToken({
-        sub: user.id,
-        organizationId:
-          membership.organizationId,
-        role: membership.role,
-      });
+    const accessToken = generateAccessToken({
+      sub: user.id,
+      organizationId: membership.organizationId,
+      role: membership.role,
+    });
 
     // Rotate refresh token
-    const newTokenId =
-      crypto.randomUUID();
+    const newTokenId = crypto.randomUUID();
 
-    const newRefreshToken =
-      generateRefreshToken({
-        sub: user.id,
-        tokenId: newTokenId,
-      });
+    const newRefreshToken = generateRefreshToken({
+      sub: user.id,
+      tokenId: newTokenId,
+    });
 
-    const newTokenHash =
-      hashRefreshToken(newRefreshToken);
+    const newTokenHash = hashRefreshToken(newRefreshToken);
 
-    const expiresAt = new Date(
-      Date.now() +
-        7 * 24 * 60 * 60 * 1000
-    );
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
     // Revoke old token
-    await authRepository.revokeRefreshToken(
-      tokenHash
-    );
+    await authRepository.revokeRefreshToken(tokenHash);
 
     // Store new token
     await authRepository.createRefreshToken({
@@ -280,29 +257,24 @@ const refresh = async (refreshToken: string) => {
   }
 };
 
-
 // LOGOUT SERVICE
 const logout = async (refreshToken: string) => {
   try {
     if (!refreshToken) {
       throw new AppError(
         messages.MISSING_REFRESH_TOKEN,
-        "MISSING_REFRESH_TOKEN",
-         statusCodes.BAD_REQUEST
+        'MISSING_REFRESH_TOKEN',
+        statusCodes.BAD_REQUEST
       );
     }
 
-    const tokenHash =
-      hashRefreshToken(refreshToken);
+    const tokenHash = hashRefreshToken(refreshToken);
 
-    await authRepository.revokeRefreshToken(
-      tokenHash
-    );
+    await authRepository.revokeRefreshToken(tokenHash);
   } catch (error) {
     throw error;
   }
 };
-
 
 export default {
   register,
