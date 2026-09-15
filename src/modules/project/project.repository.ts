@@ -1,10 +1,10 @@
-import prisma from "../../db/prisma";
+import prisma from '../../db/prisma';
 
 import {
   CreateProjectInput,
   PaginationInput,
   UpdateProjectInput,
-} from "./project.types";
+} from './project.types';
 
 // CREATE PROJECT
 const createProject = async (
@@ -21,10 +21,7 @@ const createProject = async (
 };
 
 // GET PROJECTS
-const findProjects = async (
-  organizationId: string,
-  query: PaginationInput
-) => {
+const findProjects = async (organizationId: string, query: PaginationInput) => {
   const { page, limit } = query;
 
   const skip = (page - 1) * limit;
@@ -40,7 +37,7 @@ const findProjects = async (
       skip,
       take: limit,
       orderBy: {
-        createdAt: "desc",
+        createdAt: 'desc',
       },
     }),
 
@@ -58,21 +55,24 @@ const findProjects = async (
 };
 
 // FIND PROJECT BY ID
-const findProjectById = async (
-  projectId: string
-) => {
+const findProjectById = async (projectId: string) => {
   return prisma.project.findUnique({
     where: {
       id: projectId,
+    },
+    include: {
+      organization: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
     },
   });
 };
 
 // UPDATE PROJECT
-const updateProject = async (
-  projectId: string,
-  input: UpdateProjectInput
-) => {
+const updateProject = async (projectId: string, input: UpdateProjectInput) => {
   return prisma.project.update({
     where: {
       id: projectId,
@@ -91,9 +91,7 @@ const updateProject = async (
 };
 
 // DELETE PROJECT
-const softDeleteProject = async (
-  projectId: string
-) => {
+const softDeleteProject = async (projectId: string) => {
   return prisma.project.update({
     where: {
       id: projectId,
