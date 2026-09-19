@@ -27,6 +27,10 @@ const messages = {
   COMMENT_UPDATED: 'Comment updated successfully',
   COMMENT_DELETED: 'Comment deleted successfully',
   COMMENT_NOT_FOUND: 'Comment not found',
+  ORGANIZATION_ACCESS_DENIED:
+    'Organization not found or you do not have access to this organization',
+  ORGANIZATION_ADMIN_REQUIRED:
+    'You do not have permission to perform this action',
 };
 
 export default messages;

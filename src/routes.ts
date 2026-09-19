@@ -4,7 +4,8 @@ import authRoutes from './modules/auth/auth.route';
 import projectRoutes from './modules/project/project.route';
 import taskRoutes from './modules/task/task.route';
 import commentRoutes from './modules/comments/comment.route';
-import dashboardroute from './modules/dashboard/dashboard.route';
+import dashboardRoutes from './modules/dashboard/dashboard.route';
+import organizationRoutes from './modules/organization/organization.route';
 
 const router = Router();
 
@@ -12,6 +13,7 @@ router.use('/auth', authRoutes);
 router.use('/projects', projectRoutes);
 router.use('/', taskRoutes);
 router.use('/', commentRoutes);
-router.use('/project', dashboardroute);
+router.use('/project', dashboardRoutes);
+router.use('/organizations', organizationRoutes);
 
 export default router;
