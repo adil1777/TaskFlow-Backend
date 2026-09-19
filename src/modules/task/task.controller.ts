@@ -1,5 +1,4 @@
 import { Request, Response, NextFunction } from 'express';
-
 import taskService from './task.service';
 import statusCodes from '../../utils/statusCodes';
 import messages from '../../utils/messages';
@@ -158,29 +157,6 @@ const unassignTask = async (
   }
 };
 
-//PROJECT DASHBOARD with task counts grouped by status
-const getDashboard = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  try {
-    const user = req.user!;
-
-    const dashboard = await taskService.getProjectDashboard(
-      user.organizationId,
-      req.params.projectId as string
-    );
-
-    res.status(statusCodes.OK).json({
-      success: true,
-      data: dashboard,
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
 export default {
   createTask,
   getTasks,
@@ -189,5 +165,4 @@ export default {
   deleteTask,
   assignTask,
   unassignTask,
-  getDashboard,
 };

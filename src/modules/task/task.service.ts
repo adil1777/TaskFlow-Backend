@@ -195,33 +195,6 @@ const unassignTask = async (
   }
 };
 
-// PROJECT DASHBOARD
-const getProjectDashboard = async (
-  organizationId: string,
-  projectId: string
-) => {
-  try {
-    await getAuthorizedProject(organizationId, projectId);
-
-    const result = await taskRepository.getTaskDashboard(projectId);
-
-    const dashboard = {
-      todo: 0,
-      in_progress: 0,
-      review: 0,
-      done: 0,
-    };
-
-    for (const item of result) {
-      dashboard[item.status] = item._count._all;
-    }
-
-    return dashboard;
-  } catch (error) {
-    throw error;
-  }
-};
-
 // AUTHORIZED PROJECT
 const getAuthorizedProject = async (
   organizationId: string,
@@ -260,5 +233,5 @@ export default {
   deleteTask,
   assignTask,
   unassignTask,
-  getProjectDashboard,
+  getAuthorizedProject,
 };

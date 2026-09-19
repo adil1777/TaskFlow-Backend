@@ -243,22 +243,6 @@ const deleteAssignment = async (taskId: string, assigneeId: string) => {
   });
 };
 
-// TASK DASHBOARD
-const getTaskDashboard = async (projectId: string) => {
-  return prisma.task.groupBy({
-    by: ['status'],
-
-    where: {
-      projectId,
-      deletedAt: null,
-    },
-
-    _count: {
-      _all: true,
-    },
-  });
-};
-
 //FIND PROJECT BY ID
 const findProjectById = async (projectId: string) => {
   return prisma.project.findUnique({
@@ -295,7 +279,6 @@ export default {
   createAssignment,
   findAssignment,
   deleteAssignment,
-  getTaskDashboard,
   findProjectById,
   findTaskWithOrganization,
 };
