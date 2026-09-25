@@ -1,6 +1,6 @@
 const messages = {
   REGISTER_SUCCESS: 'User registered successfully',
-  LOGIN_SUCCESS: 'Login successful',
+  LOGIN_SUCCESS: 'Login successfully',
   LOGGED_OUT_SUCCESS: 'Logged out successfully',
   USER_EXISTS: 'User already exists',
   USER_NOT_FOUND: 'User not found',
@@ -27,10 +27,24 @@ const messages = {
   COMMENT_UPDATED: 'Comment updated successfully',
   COMMENT_DELETED: 'Comment deleted successfully',
   COMMENT_NOT_FOUND: 'Comment not found',
+  ORGANIZATION_CREATED: 'Organization created successfully',
   ORGANIZATION_ACCESS_DENIED:
     'Organization not found or you do not have access to this organization',
   ORGANIZATION_ADMIN_REQUIRED:
     'You do not have permission to perform this action',
+  INVALID_ORGANIZATION_ADMIN:
+    'System admin cannot be assigned as organization admin',
+  ORGANIZATION_NOT_FOUND: 'Organization not found',
+  INVALID_ORGANIZATION_MEMBER:
+    'System admin cannot be added as an organization member',
+  ORGANIZATIONS_FETCHED: ' All Organization fetched successfully',
+  ORGANIZATION_FETCHED: ' Organization fetched successfully',
+  ORGANIZATION_UPDATED: 'Organization updated successfully',
+  ORGANIZATION_DELETED: 'Organization deleted successfully',
+  ORGANIZATION_MEMEBER_FETCHED: 'Organization members fetched successfully',
+  MEMBER_ADDED: 'Member added successfully',
+  ORGANIZATION_MEMEBER_UPDATED: 'Organization member updated successfully',
+  MEMBER_REMOVED: 'Member removed successfully',
 };
 
 export default messages;

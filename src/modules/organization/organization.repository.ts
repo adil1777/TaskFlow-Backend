@@ -1,182 +1,142 @@
+import { OrgRole } from '@prisma/client';
 import prisma from '../../db/prisma';
 
-/**
- * Get all organizations where the user is a member.
- *
- * The user can only access organizations
- * they are associated with through OrgMember.
- */
-const getOrganizationsByUser = async (userId: string) => {
-  const memberships = await prisma.orgMember.findMany({
+// FIND USER BY ID
+const findUserById = async (userId: string) => {
+  return prisma.user.findUnique({
     where: {
-      userId,
+      id: userId,
     },
-
     select: {
-      role: true,
-
-      organization: {
-        select: {
-          id: true,
-          name: true,
-          createdAt: true,
-          updatedAt: true,
-        },
-      },
-    },
-
-    orderBy: {
-      organization: {
-        name: 'asc',
-      },
+      id: true,
+      name: true,
+      email: true,
+      systemRole: true,
     },
   });
-
-  return memberships.map(({ organization, role }) => ({
-    id: organization.id,
-    name: organization.name,
-    role,
-    createdAt: organization.createdAt,
-    updatedAt: organization.updatedAt,
-  }));
 };
 
-/**
- * Get organization details for an authenticated user.
- *
- * Authorization:
- * The user must belong to the requested organization.
+// CREATE ORGANIZATION + ADMIN
+const createOrganizationWithAdmin = async (data: {
+  organizationName: string;
+  userId: string;
+}) => {
+  return prisma.$transaction(async (tx) => {
+    const organization = await tx.organization.create({
+      data: {
+        name: data.organizationName,
+      },
+    });
 
- */
-const getOrganizationByUser = async (
-  userId: string,
-  organizationId: string
-) => {
-  const organization = await prisma.organization.findFirst({
+    const membership = await tx.orgMember.create({
+      data: {
+        userId: data.userId,
+        organizationId: organization.id,
+        role: OrgRole.org_admin,
+      },
+    });
+
+    return {
+      organization,
+      membership,
+    };
+  });
+};
+
+//Organization
+const findOrganizationById = async (organizationId: string) => {
+  return prisma.organization.findUnique({
     where: {
       id: organizationId,
-
-      /**
-       * Multi-tenant authorization.
-       *
-       * The organization will only be returned
-       * if the authenticated user is a member
-       * of this organization.
-       */
-      members: {
-        some: {
-          userId,
-        },
-      },
     },
+    select: {
+      id: true,
+      name: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  });
+};
 
+const findOrganizationWithDetails = async (organizationId: string) => {
+  return prisma.organization.findUnique({
+    where: {
+      id: organizationId,
+    },
     select: {
       id: true,
       name: true,
       createdAt: true,
       updatedAt: true,
 
-      /**
-       * All members of this organization.
-       *
-       * This also allows us to determine:
-       * - Current user's role
-       * - Organization admins
-       * - Other members
-       */
-      members: {
-        select: {
-          id: true,
-          userId: true,
-          role: true,
-          createdAt: true,
-
-          user: {
-            select: {
-              name: true,
-              email: true,
-            },
-          },
-        },
-
-        orderBy: {
-          createdAt: 'asc',
-        },
-      },
-
-      projects: {
-        where: {
-          deletedAt: null,
-        },
-
-        select: {
-          id: true,
-          name: true,
-          description: true,
-          createdAt: true,
-          updatedAt: true,
-        },
-
-        orderBy: {
-          createdAt: 'desc',
-        },
-      },
-
       _count: {
         select: {
           members: true,
-
-          projects: {
-            where: {
-              deletedAt: null,
-            },
-          },
+          projects: true,
         },
       },
     },
   });
-
-  if (!organization) {
-    return null;
-  }
-
-  /**
-   * Since the query already guarantees that
-   * this user belongs to the organization,
-   * find their membership from the fetched members.
-   */
-  const currentUserMembership = organization.members.find(
-    (member) => member.userId === userId
-  );
-
-  return {
-    id: organization.id,
-    name: organization.name,
-
-    // Current authenticated user's role
-    role: currentUserMembership?.role,
-
-    createdAt: organization.createdAt,
-    updatedAt: organization.updatedAt,
-
-    memberCount: organization._count.members,
-    projectCount: organization._count.projects,
-
-    members: organization.members.map((member) => ({
-      id: member.id,
-      userId: member.userId,
-      name: member.user.name,
-      email: member.user.email,
-      role: member.role,
-      joinedAt: member.createdAt,
-    })),
-
-    projects: organization.projects,
-  };
 };
 
-// Get a user's membership in a specific organization.
-const getMembership = async (userId: string, organizationId: string) => {
+const findAllOrganizations = async () => {
+  return prisma.organization.findMany({
+    orderBy: {
+      createdAt: 'desc',
+    },
+    select: {
+      id: true,
+      name: true,
+      createdAt: true,
+      updatedAt: true,
+
+      _count: {
+        select: {
+          members: true,
+          projects: true,
+        },
+      },
+    },
+  });
+};
+
+const updateOrganization = async (
+  organizationId: string,
+  data: {
+    name: string;
+  }
+) => {
+  return prisma.organization.update({
+    where: {
+      id: organizationId,
+    },
+    data: {
+      name: data.name,
+    },
+    select: {
+      id: true,
+      name: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  });
+};
+
+//Delete Organization
+const deleteOrganization = async (organizationId: string) => {
+  return prisma.organization.delete({
+    where: {
+      id: organizationId,
+    },
+    select: {
+      id: true,
+      name: true,
+    },
+  });
+};
+
+// Membership
+const findMembership = async (organizationId: string, userId: string) => {
   return prisma.orgMember.findUnique({
     where: {
       userId_organizationId: {
@@ -184,18 +144,141 @@ const getMembership = async (userId: string, organizationId: string) => {
         organizationId,
       },
     },
-
     select: {
       id: true,
       userId: true,
       organizationId: true,
       role: true,
+      createdAt: true,
+    },
+  });
+};
+
+const findOrganizationMembers = async (organizationId: string) => {
+  return prisma.orgMember.findMany({
+    where: {
+      organizationId,
+    },
+    orderBy: {
+      createdAt: 'asc',
+    },
+    select: {
+      id: true,
+      userId: true,
+      organizationId: true,
+      role: true,
+      createdAt: true,
+
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          systemRole: true,
+        },
+      },
+    },
+  });
+};
+
+const createMembership = async (data: {
+  organizationId: string;
+  userId: string;
+  role: OrgRole;
+}) => {
+  return prisma.orgMember.create({
+    data: {
+      organizationId: data.organizationId,
+      userId: data.userId,
+      role: data.role,
+    },
+    select: {
+      id: true,
+      userId: true,
+      organizationId: true,
+      role: true,
+      createdAt: true,
+
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          systemRole: true,
+        },
+      },
+    },
+  });
+};
+
+const updateMembershipRole = async (
+  organizationId: string,
+  userId: string,
+  role: OrgRole
+) => {
+  return prisma.orgMember.update({
+    where: {
+      userId_organizationId: {
+        userId,
+        organizationId,
+      },
+    },
+    data: {
+      role,
+    },
+    select: {
+      id: true,
+      userId: true,
+      organizationId: true,
+      role: true,
+      createdAt: true,
+
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          systemRole: true,
+        },
+      },
+    },
+  });
+};
+
+const deleteMembership = async (organizationId: string, userId: string) => {
+  return prisma.orgMember.delete({
+    where: {
+      userId_organizationId: {
+        userId,
+        organizationId,
+      },
+    },
+  });
+};
+
+const countOrganizationAdmins = async (organizationId: string) => {
+  return prisma.orgMember.count({
+    where: {
+      organizationId,
+      role: OrgRole.org_admin,
     },
   });
 };
 
 export default {
-  getOrganizationsByUser,
-  getOrganizationByUser,
-  getMembership,
+  findUserById,
+
+  findOrganizationById,
+  findOrganizationWithDetails,
+  findAllOrganizations,
+  updateOrganization,
+  createOrganizationWithAdmin,
+  deleteOrganization,
+
+  findMembership,
+  findOrganizationMembers,
+  createMembership,
+  updateMembershipRole,
+  deleteMembership,
+  countOrganizationAdmins,
 };

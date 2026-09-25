@@ -1,20 +1,27 @@
-import { z } from "zod";
+import { z } from 'zod';
 
 import {
   registerSchema,
   loginSchema,
   refreshSchema,
   logoutSchema,
-} from "./auth.validation";
+} from './auth.validation';
 
-export type RegisterInput =
-  z.infer<typeof registerSchema>;
+import { OrgRole, SystemRole } from '@prisma/client';
 
-export type LoginInput =
-  z.infer<typeof loginSchema>;
+export type RegisterInput = z.infer<typeof registerSchema>;
 
-export type RefreshInput =
-  z.infer<typeof refreshSchema>;
+export type LoginInput = z.infer<typeof loginSchema>;
 
-export type LogoutInput =
-  z.infer<typeof logoutSchema>;
+export type RefreshInput = z.infer<typeof refreshSchema>;
+
+export type LogoutInput = z.infer<typeof logoutSchema>;
+
+export interface AuthUser {
+  id: string;
+  systemRole: SystemRole;
+
+  // Organization context is optional for system admins
+  organizationId?: string;
+  role?: OrgRole;
+}

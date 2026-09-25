@@ -1,20 +1,11 @@
-import {
-  Request,
-  Response,
-  NextFunction,
-} from "express";
+import { Request, Response, NextFunction } from 'express';
 
-import { verifyAccessToken } from "../utils/jwt";
-import prisma from "../db/prisma";
-import { AppError } from "../utils/error";
-import { OrgRole } from "@prisma/client";
-import statusCodes from "../utils/statusCodes";
+import { SystemRole } from '@prisma/client';
 
-export interface AuthUser {
-  id: string;
-  organizationId: string;
-  role: OrgRole;
-}
+import { verifyAccessToken } from '../utils/jwt';
+import { AppError } from '../utils/error';
+import statusCodes from '../utils/statusCodes';
+import authRepository from '../modules/auth/auth.repository';
 
 export async function authMiddleware(
   req: Request,
@@ -22,17 +13,28 @@ export async function authMiddleware(
   next: NextFunction
 ) {
   try {
-    const header = req.headers.authorization;
+    const authorization = req.headers.authorization;
 
-    if (!header?.startsWith("Bearer ")) {
+    // Check Authorization header
+    if (!authorization?.startsWith('Bearer ')) {
       throw new AppError(
-        "Authentication required",
-        "UNAUTHORIZED",
+        'Authentication required',
+        'UNAUTHORIZED',
         statusCodes.UNAUTHORIZED
       );
     }
 
-    const token = header.substring(7);
+    const token = authorization.substring(7).trim();
+
+    if (!token) {
+      throw new AppError(
+        'Authentication required',
+        'UNAUTHORIZED',
+        statusCodes.UNAUTHORIZED
+      );
+    }
+
+    // 2. Verify access token
 
     let payload;
 
@@ -40,36 +42,74 @@ export async function authMiddleware(
       payload = verifyAccessToken(token);
     } catch {
       throw new AppError(
-        "Invalid or expired access token",
-        "INVALID_ACCESS_TOKEN",
-       statusCodes.UNAUTHORIZED
+        'Invalid or expired access token',
+        'INVALID_ACCESS_TOKEN',
+        statusCodes.UNAUTHORIZED
       );
     }
 
-    const membership =
-      await prisma.orgMember.findFirst({
-        where: {
-          userId: payload.sub,
-          organizationId: payload.organizationId,
-        },
-      });
-
-    if (!membership) {
+    if (!payload.sub) {
       throw new AppError(
-        "Organization membership not found",
-        "MEMBERSHIP_NOT_FOUND",
+        'Invalid access token',
+        'INVALID_ACCESS_TOKEN',
+        statusCodes.UNAUTHORIZED
+      );
+    }
+
+    //Find authenticated user
+    const user = await authRepository.findUserById(payload.sub);
+
+    if (!user) {
+      throw new AppError(
+        'User not found',
+        'USER_NOT_FOUND',
+        statusCodes.UNAUTHORIZED
+      );
+    }
+
+    // 4. System Admin
+    if (user.systemRole === SystemRole.system_admin) {
+      req.user = {
+        id: user.id,
+        systemRole: user.systemRole,
+      };
+
+      return next();
+    }
+
+    //Organization context required for normal users
+    if (!payload.organizationId) {
+      throw new AppError(
+        'Organization context is required',
+        'ORGANIZATION_CONTEXT_REQUIRED',
         statusCodes.FORBIDDEN
       );
     }
 
+    //Verify organization membership
+    const membership = await authRepository.findMembership(
+      user.id,
+      payload.organizationId
+    );
+
+    if (!membership) {
+      throw new AppError(
+        'Organization membership not found',
+        'MEMBERSHIP_NOT_FOUND',
+        statusCodes.FORBIDDEN
+      );
+    }
+    //Attach authenticated user to request
+
     req.user = {
-      id: payload.sub,
+      id: user.id,
+      systemRole: user.systemRole,
       organizationId: membership.organizationId,
       role: membership.role,
     };
 
-    next();
+    return next();
   } catch (error) {
-    next(error);
+    return next(error);
   }
 }

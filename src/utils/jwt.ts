@@ -1,12 +1,14 @@
-import jwt from "jsonwebtoken";
-import serverConfig  from "../config/serverConfig";
-import { OrgRole } from "@prisma/client";
-import crypto from "crypto";
+import jwt from 'jsonwebtoken';
+import serverConfig from '../config/serverConfig';
+import { OrgRole, SystemRole } from '@prisma/client';
+import crypto from 'crypto';
 
-export interface AccessTokenPayload {
+interface AccessTokenPayload {
   sub: string;
-  organizationId: string;
-  role: OrgRole;
+  systemRole: SystemRole;
+
+  organizationId?: string;
+  role?: OrgRole;
 }
 
 export interface RefreshTokenPayload {
@@ -14,34 +16,23 @@ export interface RefreshTokenPayload {
   tokenId: string;
 }
 
-export const generateAccessToken = (
-  payload: AccessTokenPayload
-): string => {
+export const generateAccessToken = (payload: AccessTokenPayload): string => {
   return jwt.sign(payload, serverConfig.jwtAccessSecret, {
     expiresIn: serverConfig.accessTokenExpiresIn,
   });
 };
 
-export const generateRefreshToken = (
-  payload: RefreshTokenPayload
-): string => {
+export const generateRefreshToken = (payload: RefreshTokenPayload): string => {
   return jwt.sign(payload, serverConfig.jwtRefreshSecret, {
     expiresIn: serverConfig.refreshTokenExpiresIn,
   });
 };
 
-export const verifyAccessToken = (
-  token: string
-): AccessTokenPayload => {
-  return jwt.verify(
-    token,
-    serverConfig.jwtAccessSecret
-  ) as AccessTokenPayload;
+export const verifyAccessToken = (token: string): AccessTokenPayload => {
+  return jwt.verify(token, serverConfig.jwtAccessSecret) as AccessTokenPayload;
 };
 
-export const verifyRefreshToken = (
-  token: string
-): RefreshTokenPayload => {
+export const verifyRefreshToken = (token: string): RefreshTokenPayload => {
   return jwt.verify(
     token,
     serverConfig.jwtRefreshSecret
@@ -49,8 +40,10 @@ export const verifyRefreshToken = (
 };
 
 export const hashRefreshToken = (token: string): string => {
-  return crypto
-    .createHash("sha256")
-    .update(token)
-    .digest("hex");
+  return crypto.createHash('sha256').update(token).digest('hex');
 };
+
+const REFRESH_TOKEN_DAYS = 7;
+
+export const getRefreshTokenExpiry = () =>
+  new Date(Date.now() + REFRESH_TOKEN_DAYS * 24 * 60 * 60 * 1000);

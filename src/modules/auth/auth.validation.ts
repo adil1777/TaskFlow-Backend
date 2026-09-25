@@ -15,11 +15,6 @@ export const registerSchema = z
       .string()
       .min(8, 'Password must contain at least 8 characters')
       .max(100),
-
-    organizationName: z
-      .string()
-      .min(2, 'Organization name is required')
-      .max(100),
   })
   .strict();
 

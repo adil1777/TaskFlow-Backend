@@ -6,6 +6,17 @@ datasource db {
   provider = "postgresql"
 }
 
+
+enum SystemRole {
+  system_admin
+  user
+}
+
+enum OrgRole {
+  org_admin
+  member
+}
+
 enum Status {
   todo
   in_progress
@@ -20,32 +31,57 @@ enum Priority {
   urgent
 }
 
-enum OrgRole {
-  org_admin
-  member
+enum TaskHistoryAction {
+  created
+  updated
+  status_changed
+  priority_changed
+  assigned
+  unassigned
+  comment_added
 }
 
-model User {
-  id           String   @id @default(uuid())
-  name         String
-  email        String   @unique
-  passwordHash String
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+// ======================================================
+// USER
+// ======================================================
 
-  memberships   OrgMember[]
-  assignments   TaskAssignment[]
+model User {
+  id           String     @id @default(uuid())
+  name         String
+  email        String     @unique
+  passwordHash String
+  systemRole   SystemRole @default(user)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships        OrgMember[]
+  projectMemberships ProjectMember[]
+
+  assignments     TaskAssignment[] @relation("TaskAssignmentAssignee")
+  assignmentsMade TaskAssignment[] @relation("TaskAssignmentAssignedBy")
+
+  tasksCreated    Task[]    @relation("TaskCreatedBy")
+  managedProjects Project[] @relation("ProjectManager")
+
   comments      Comment[]
   refreshTokens RefreshToken[]
   notifications Notification[]
+  taskHistory   TaskHistory[]
 
   @@index([email])
+  @@index([systemRole])
   @@map("users")
 }
 
+// ======================================================
+// ORGANIZATION
+// ======================================================
+
 model Organization {
-  id        String   @id @default(uuid())
-  name      String
+  id   String @id @default(uuid())
+  name String
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -54,6 +90,10 @@ model Organization {
 
   @@map("organizations")
 }
+
+// ======================================================
+// ORGANIZATION MEMBER
+// ======================================================
 
 model OrgMember {
   id             String   @id @default(uuid())
@@ -71,40 +111,85 @@ model OrgMember {
   @@map("org_members")
 }
 
+// ======================================================
+// PROJECT
+// ======================================================
+
 model Project {
-  id             String    @id @default(uuid())
+  id             String  @id @default(uuid())
   organizationId String
-  name           String
-  description    String?
-  deletedAt      DateTime?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  managerId      String?
+
+  name        String
+  description String?
+
+  deletedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  tasks        Task[]
+  manager      User?        @relation("ProjectManager", fields: [managerId], references: [id], onDelete: SetNull)
+
+  members ProjectMember[]
+  tasks   Task[]
 
   @@index([organizationId])
   @@index([organizationId, deletedAt])
+  @@index([managerId])
   @@map("projects")
 }
 
+// ======================================================
+// PROJECT MEMBER
+// ======================================================
+
+model ProjectMember {
+  id        String   @id @default(uuid())
+  projectId String
+  userId    String
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@index([projectId])
+  @@index([userId])
+  @@map("project_members")
+}
+
+// ======================================================
+// TASK
+// ======================================================
+
 model Task {
-  id          String    @id @default(uuid())
+  id          String @id @default(uuid())
   projectId   String
+  createdById String
+
   title       String
   description String?
-  status      Status    @default(todo)
-  priority    Priority  @default(medium)
-  dueDate     DateTime?
-  deletedAt   DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
 
-  project     Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  status   Status   @default(todo)
+  priority Priority @default(medium)
+
+  dueDate DateTime?
+
+  deletedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy User    @relation("TaskCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+
   assignments TaskAssignment[]
   comments    Comment[]
+  history     TaskHistory[]
 
   @@index([projectId])
+  @@index([createdById])
   @@index([status])
   @@index([priority])
   @@index([dueDate])
@@ -113,26 +198,38 @@ model Task {
   @@map("tasks")
 }
 
-model TaskAssignment {
-  id         String   @id @default(uuid())
-  taskId     String
-  userId     String
-  assignedAt DateTime @default(now())
+// ======================================================
+// TASK ASSIGNMENT
+// ======================================================
 
-  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+model TaskAssignment {
+  id           String   @id @default(uuid())
+  taskId       String
+  userId       String
+  assignedById String
+  assignedAt   DateTime @default(now())
+
+  task       Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user       User @relation("TaskAssignmentAssignee", fields: [userId], references: [id], onDelete: Cascade)
+  assignedBy User @relation("TaskAssignmentAssignedBy", fields: [assignedById], references: [id], onDelete: Restrict)
 
   @@unique([taskId, userId])
   @@index([taskId])
   @@index([userId])
+  @@index([assignedById])
   @@map("task_assignments")
 }
 
+// ======================================================
+// COMMENT
+// ======================================================
+
 model Comment {
-  id        String   @id @default(uuid())
-  taskId    String
-  userId    String
-  content   String
+  id      String @id @default(uuid())
+  taskId  String
+  userId  String
+  content String
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -144,13 +241,40 @@ model Comment {
   @@map("comments")
 }
 
+// ======================================================
+// TASK HISTORY
+// ======================================================
+
+model TaskHistory {
+  id       String            @id @default(uuid())
+  taskId   String
+  userId   String
+  action   TaskHistoryAction
+  oldValue Json?
+  newValue Json?
+
+  createdAt DateTime @default(now())
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([taskId, createdAt])
+  @@index([userId])
+  @@map("task_history")
+}
+
+// ======================================================
+// REFRESH TOKEN
+// ======================================================
+
 model RefreshToken {
   id        String    @id @default(uuid())
   userId    String
   tokenHash String    @unique
   expiresAt DateTime
   revokedAt DateTime?
-  createdAt DateTime  @default(now())
+
+  createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -159,11 +283,16 @@ model RefreshToken {
   @@map("refresh_tokens")
 }
 
+// ======================================================
+// NOTIFICATION
+// ======================================================
+
 model Notification {
-  id        String   @id @default(uuid())
-  userId    String
-  message   String
-  isRead    Boolean  @default(false)
+  id      String  @id @default(uuid())
+  userId  String
+  message String
+  isRead  Boolean @default(false)
+
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)

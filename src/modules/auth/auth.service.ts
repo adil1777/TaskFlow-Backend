@@ -1,32 +1,41 @@
 import crypto from 'crypto';
+
+import { OrgRole, SystemRole } from '@prisma/client';
+
 import authRepository from './auth.repository';
+
 import messages from '../../utils/messages';
+import statusCodes from '../../utils/statusCodes';
+import { AppError } from '../../utils/error';
 
 import { comparePassword, hashPassword } from '../../utils/password';
 
 import {
   generateAccessToken,
   generateRefreshToken,
+  getRefreshTokenExpiry,
   hashRefreshToken,
   verifyRefreshToken,
 } from '../../utils/jwt';
-import { LoginInput, RegisterInput } from './auth.types';
-import { AppError } from '../../utils/error';
-import statusCodes from '../../utils/statusCodes';
 
-//REGISTER SERVICE
+import { LoginInput, RegisterInput } from './auth.types';
+
+// REGISTER
 const register = async (input: RegisterInput) => {
   try {
     const existingUser = await authRepository.findUserByEmail(input.email);
 
     if (existingUser) {
-      throw new AppError(messages.USER_EXISTS, 'USER_EXISTS', 409);
+      throw new AppError(
+        messages.USER_EXISTS,
+        'USER_EXISTS',
+        statusCodes.CONFLICT
+      );
     }
 
     const passwordHash = await hashPassword(input.password);
 
-    const result = await authRepository.createOrganizationWithAdmin({
-      organizationName: input.organizationName,
+    const user = await authRepository.createUser({
       name: input.name,
       email: input.email,
       passwordHash,
@@ -34,14 +43,10 @@ const register = async (input: RegisterInput) => {
 
     return {
       user: {
-        id: result.user.id,
-        name: result.user.name,
-        email: result.user.email,
-      },
-
-      organization: {
-        id: result.organization.id,
-        name: result.organization.name,
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        systemRole: user.systemRole,
       },
     };
   } catch (error) {
@@ -49,7 +54,51 @@ const register = async (input: RegisterInput) => {
   }
 };
 
-//LOGIN SERVICE
+// CREATE SESSION
+const createSession = async (data: {
+  userId: string;
+  systemRole: SystemRole;
+  organizationId?: string;
+  role?: OrgRole;
+}) => {
+  try {
+    const tokenId = crypto.randomUUID();
+
+    const accessToken = generateAccessToken({
+      sub: data.userId,
+      systemRole: data.systemRole,
+      ...(data.organizationId && {
+        organizationId: data.organizationId,
+      }),
+      ...(data.role && {
+        role: data.role,
+      }),
+    });
+
+    const refreshToken = generateRefreshToken({
+      sub: data.userId,
+      tokenId,
+    });
+
+    const tokenHash = hashRefreshToken(refreshToken);
+
+    await authRepository.createRefreshToken({
+      id: tokenId,
+      userId: data.userId,
+      tokenHash,
+      expiresAt: getRefreshTokenExpiry(),
+    });
+
+    return {
+      accessToken,
+      refreshToken,
+    };
+  } catch (error) {
+    throw error;
+  }
+};
+
+// LOGIN
 const login = async (input: LoginInput) => {
   try {
     const user = await authRepository.findUserWithMemberships(input.email);
@@ -75,41 +124,53 @@ const login = async (input: LoginInput) => {
       );
     }
 
-    const membership = user.memberships[0];
+    // SYSTEM ADMIN
+    if (user.systemRole === SystemRole.system_admin) {
+      const session = await createSession({
+        userId: user.id,
+        systemRole: user.systemRole,
+      });
 
-    if (!membership) {
-      throw new AppError(
-        messages.ORGANIZATION_MEMBERSHIP_NOT_FOUND,
-        'ORGANIZATION_MEMBERSHIP_NOT_FOUND',
-        statusCodes.FORBIDDEN
-      );
+      return {
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          systemRole: user.systemRole,
+        },
+
+        organization: null,
+
+        ...session,
+      };
     }
 
-    // Generate access token
-    const accessToken = generateAccessToken({
-      sub: user.id,
+    // ORGANIZATION USER
+    const membership = user.memberships[0];
+
+    // USER WITHOUT ORGANIZATION
+    if (!membership) {
+      return {
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          systemRole: user.systemRole,
+        },
+
+        organization: null,
+
+        accessToken: null,
+        refreshToken: null,
+      };
+    }
+
+    // USER WITH ORGANIZATION
+    const session = await createSession({
+      userId: user.id,
+      systemRole: user.systemRole,
       organizationId: membership.organizationId,
       role: membership.role,
-    });
-
-    // Generate refresh token
-    const tokenId = crypto.randomUUID();
-
-    const refreshToken = generateRefreshToken({
-      sub: user.id,
-      tokenId,
-    });
-
-    // Hash refresh token before storing in DB
-    const tokenHash = hashRefreshToken(refreshToken);
-
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-
-    await authRepository.createRefreshToken({
-      id: tokenId,
-      userId: user.id,
-      tokenHash,
-      expiresAt,
     });
 
     return {
@@ -117,22 +178,23 @@ const login = async (input: LoginInput) => {
         id: user.id,
         name: user.name,
         email: user.email,
+        systemRole: user.systemRole,
       },
 
       organization: {
         id: membership.organizationId,
+        name: membership.organization.name,
         role: membership.role,
       },
 
-      accessToken,
-      refreshToken,
+      ...session,
     };
   } catch (error) {
     throw error;
   }
 };
 
-// REFRESH SERVICE
+// REFRESH
 const refresh = async (refreshToken: string) => {
   try {
     if (!refreshToken) {
@@ -143,7 +205,6 @@ const refresh = async (refreshToken: string) => {
       );
     }
 
-    // Verify JWT signature
     let payload;
 
     try {
@@ -156,10 +217,8 @@ const refresh = async (refreshToken: string) => {
       );
     }
 
-    // Hash token to search DB
     const tokenHash = hashRefreshToken(refreshToken);
 
-    // Find stored refresh token
     const storedToken = await authRepository.findRefreshToken(tokenHash);
 
     if (!storedToken) {
@@ -170,7 +229,6 @@ const refresh = async (refreshToken: string) => {
       );
     }
 
-    // Already revoked
     if (storedToken.revokedAt) {
       throw new AppError(
         messages.INVALID_REFRESH_TOKEN,
@@ -179,8 +237,7 @@ const refresh = async (refreshToken: string) => {
       );
     }
 
-    // Expired
-    if (storedToken.expiresAt < new Date()) {
+    if (storedToken.expiresAt <= new Date()) {
       throw new AppError(
         messages.REFRESH_TOKEN_EXPIRED,
         'REFRESH_TOKEN_EXPIRED',
@@ -188,7 +245,6 @@ const refresh = async (refreshToken: string) => {
       );
     }
 
-    // Token must belong to same user
     if (storedToken.userId !== payload.sub) {
       throw new AppError(
         messages.INVALID_REFRESH_TOKEN,
@@ -197,7 +253,6 @@ const refresh = async (refreshToken: string) => {
       );
     }
 
-    // Get user with memberships
     const user = await authRepository.findUserWithMembershipsById(payload.sub);
 
     if (!user) {
@@ -208,56 +263,44 @@ const refresh = async (refreshToken: string) => {
       );
     }
 
-    const membership = user.memberships[0];
+    // DETERMINE ORGANIZATION CONTEXT
+    let organizationId: string | undefined;
 
-    if (!membership) {
-      throw new AppError(
-        messages.ORGANIZATION_MEMBERSHIP_NOT_FOUND,
-        'ORGANIZATION_MEMBERSHIP_NOT_FOUND',
-        statusCodes.FORBIDDEN
-      );
+    let role: any | undefined;
+
+    if (user.systemRole !== SystemRole.system_admin) {
+      const membership = user.memberships[0];
+
+      if (!membership) {
+        throw new AppError(
+          messages.ORGANIZATION_MEMBERSHIP_NOT_FOUND,
+          'ORGANIZATION_MEMBERSHIP_NOT_FOUND',
+          statusCodes.FORBIDDEN
+        );
+      }
+
+      organizationId = membership.organizationId;
+
+      role = membership.role;
     }
 
-    // Generate new access token
-    const accessToken = generateAccessToken({
-      sub: user.id,
-      organizationId: membership.organizationId,
-      role: membership.role,
+    // ROTATE TOKEN
+    const session = await createSession({
+      userId: user.id,
+      systemRole: user.systemRole,
+      organizationId,
+      role,
     });
 
-    // Rotate refresh token
-    const newTokenId = crypto.randomUUID();
-
-    const newRefreshToken = generateRefreshToken({
-      sub: user.id,
-      tokenId: newTokenId,
-    });
-
-    const newTokenHash = hashRefreshToken(newRefreshToken);
-
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-
-    // Revoke old token
     await authRepository.revokeRefreshToken(tokenHash);
 
-    // Store new token
-    await authRepository.createRefreshToken({
-      id: newTokenId,
-      userId: user.id,
-      tokenHash: newTokenHash,
-      expiresAt,
-    });
-
-    return {
-      accessToken,
-      refreshToken: newRefreshToken,
-    };
+    return session;
   } catch (error) {
     throw error;
   }
 };
 
-// LOGOUT SERVICE
+// LOGOUT
 const logout = async (refreshToken: string) => {
   try {
     if (!refreshToken) {
