@@ -16,11 +16,30 @@ const createProject = async (
       name: input.name,
       description: input.description,
       organizationId,
+      managerId: input.managerId,
+    },
+
+    select: {
+      id: true,
+      organizationId: true,
+      managerId: true,
+      name: true,
+      description: true,
+      createdAt: true,
+      updatedAt: true,
+
+      manager: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
     },
   });
 };
 
-// GET PROJECTS
+//GET PROJECTS
 const findProjects = async (organizationId: string, query: PaginationInput) => {
   const { page, limit } = query;
 
@@ -34,10 +53,37 @@ const findProjects = async (organizationId: string, query: PaginationInput) => {
   const [projects, total] = await prisma.$transaction([
     prisma.project.findMany({
       where,
+
       skip,
       take: limit,
+
       orderBy: {
         createdAt: 'desc',
+      },
+
+      select: {
+        id: true,
+        organizationId: true,
+        managerId: true,
+        name: true,
+        description: true,
+        createdAt: true,
+        updatedAt: true,
+
+        manager: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+
+        _count: {
+          select: {
+            members: true,
+            tasks: true,
+          },
+        },
       },
     }),
 
@@ -48,30 +94,58 @@ const findProjects = async (organizationId: string, query: PaginationInput) => {
 
   return {
     projects,
-    total,
-    page,
-    limit,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    },
   };
 };
 
-// FIND PROJECT BY ID
+//FIND PROJECT
 const findProjectById = async (projectId: string) => {
   return prisma.project.findUnique({
     where: {
       id: projectId,
     },
-    include: {
+
+    select: {
+      id: true,
+      organizationId: true,
+      managerId: true,
+      name: true,
+      description: true,
+      deletedAt: true,
+      createdAt: true,
+      updatedAt: true,
+
       organization: {
         select: {
           id: true,
           name: true,
         },
       },
+
+      manager: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
+
+      _count: {
+        select: {
+          members: true,
+          tasks: true,
+        },
+      },
     },
   });
 };
 
-// UPDATE PROJECT
+//UPDATE PROJECT
 const updateProject = async (projectId: string, input: UpdateProjectInput) => {
   return prisma.project.update({
     where: {
@@ -86,11 +160,33 @@ const updateProject = async (projectId: string, input: UpdateProjectInput) => {
       ...(input.description !== undefined && {
         description: input.description,
       }),
+
+      ...(input.managerId !== undefined && {
+        managerId: input.managerId,
+      }),
+    },
+
+    select: {
+      id: true,
+      organizationId: true,
+      managerId: true,
+      name: true,
+      description: true,
+      createdAt: true,
+      updatedAt: true,
+
+      manager: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
     },
   });
 };
 
-// DELETE PROJECT
+// SOFT DELETE
 const softDeleteProject = async (projectId: string) => {
   return prisma.project.update({
     where: {
@@ -103,10 +199,105 @@ const softDeleteProject = async (projectId: string) => {
   });
 };
 
+//PROJECT MEMBER
+const findProjectMember = async (projectId: string, userId: string) => {
+  return prisma.projectMember.findUnique({
+    where: {
+      projectId_userId: {
+        projectId,
+        userId,
+      },
+    },
+
+    select: {
+      id: true,
+      projectId: true,
+      userId: true,
+      createdAt: true,
+
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
+    },
+  });
+};
+
+const findProjectMembers = async (projectId: string) => {
+  return prisma.projectMember.findMany({
+    where: {
+      projectId,
+    },
+
+    orderBy: {
+      createdAt: 'asc',
+    },
+
+    select: {
+      id: true,
+      projectId: true,
+      userId: true,
+      createdAt: true,
+
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          systemRole: true,
+        },
+      },
+    },
+  });
+};
+
+const createProjectMember = async (projectId: string, userId: string) => {
+  return prisma.projectMember.create({
+    data: {
+      projectId,
+      userId,
+    },
+
+    select: {
+      id: true,
+      projectId: true,
+      userId: true,
+      createdAt: true,
+
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
+    },
+  });
+};
+
+const deleteProjectMember = async (projectId: string, userId: string) => {
+  return prisma.projectMember.delete({
+    where: {
+      projectId_userId: {
+        projectId,
+        userId,
+      },
+    },
+  });
+};
+
 export default {
   createProject,
   findProjects,
   findProjectById,
   updateProject,
   softDeleteProject,
+
+  findProjectMember,
+  findProjectMembers,
+  createProjectMember,
+  deleteProjectMember,
 };

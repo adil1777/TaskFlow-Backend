@@ -1,40 +1,12 @@
-import {
-  Request,
-  Response,
-  NextFunction,
-} from "express";
+import { Request, Response, NextFunction } from 'express';
 
-import  projectService from "./project.service";
-import statusCodes from "../../utils/statusCodes";
-import messages from "../../utils/messages";
+import projectService from './project.service';
 
+import statusCodes from '../../utils/statusCodes';
+import messages from '../../utils/messages';
 
 //CREATE PROJECT
 const createProject = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-)=> {
-  try {
-    const user = req.user!;
-
-    const project =
-      await projectService.createProject(
-        user.organizationId,
-        req.body
-      );
-
-    res.status(statusCodes.CREATED).json({
-      success: true,
-      data: project,
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-//GET PROJECT
-const getProjects = async (
   req: Request,
   res: Response,
   next: NextFunction
@@ -42,19 +14,37 @@ const getProjects = async (
   try {
     const user = req.user!;
 
-    const page = Number(req.query.page) || 1;
-    const limit = Number(req.query.limit) || 20;
-
-    const result = await projectService.getProjects(
-      user.organizationId,
-       {
-          page,
-          limit,
-        }
+    const project = await projectService.createProject(
+      user.organizationId as string,
+      req.body
     );
 
-    res.status(statusCodes.OK).json({
+    return res.status(statusCodes.CREATED).json({
       success: true,
+      message: messages.PROJECT_CREATED,
+      data: project,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+//GET PROJECTS
+const getProjects = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const user = req.user!;
+
+    const result = await projectService.getProjects(
+      user.organizationId as string,
+      {
+        page: Number(req.query.page ?? 1),
+        limit: Number(req.query.limit ?? 20),
+      }
+    );
+
+    return res.status(statusCodes.OK).json({
+      success: true,
+      message: messages.PROJECTS_FETCHED,
       data: result,
     });
   } catch (error) {
@@ -62,22 +52,21 @@ const getProjects = async (
   }
 };
 
-//GET PROJECT BY ID
+//GET PROJECT
 const getProjectById = async (
   req: Request,
   res: Response,
   next: NextFunction
-)=> {
+) => {
   try {
     const user = req.user!;
 
-    const project =
-      await projectService.getProjectById(
-        user.organizationId,
-        req.params.id as string
-      );
+    const project = await projectService.getProjectById(
+      user.organizationId as string,
+      req.params.id as string
+    );
 
-    res.status(statusCodes.OK).json({
+    return res.status(statusCodes.OK).json({
       success: true,
       data: project,
     });
@@ -86,24 +75,24 @@ const getProjectById = async (
   }
 };
 
-//UPDATE PROJECT
-const  updateProject = async(
+// UPDATE PROJECT
+const updateProject = async (
   req: Request,
   res: Response,
   next: NextFunction
-)=> {
+) => {
   try {
-   const user = req.user!;
-   
-    const project =
-      await projectService.updateProject(
-        user.organizationId,
-        req.params.id as string ,
-        req.body
-      );
+    const user = req.user!;
 
-    res.status(statusCodes.OK).json({
+    const project = await projectService.updateProject(
+      user.organizationId as string,
+      req.params.id as string,
+      req.body
+    );
+
+    return res.status(statusCodes.OK).json({
       success: true,
+      message: messages.PROJECT_UPDATED,
       data: project,
     });
   } catch (error) {
@@ -111,22 +100,21 @@ const  updateProject = async(
   }
 };
 
-
-//DELET PROJECT
-const  deleteProject = async (
-    req: Request,
+//DELETE PROJECT
+const deleteProject = async (
+  req: Request,
   res: Response,
   next: NextFunction
-)=> {
+) => {
   try {
     const user = req.user!;
 
-      await projectService.deleteProject(
-        user.organizationId,
-        req.params.id as string
-      );
+    await projectService.deleteProject(
+      user.organizationId as string,
+      req.params.id as string
+    );
 
-    res.status(statusCodes.OK).json({
+    return res.status(statusCodes.OK).json({
       success: true,
       message: messages.PROJECT_DELETED,
     });
@@ -134,10 +122,88 @@ const  deleteProject = async (
     next(error);
   }
 };
+
+// GET PROJECT MEMBERS
+const getProjectMembers = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const user = req.user!;
+
+    const members = await projectService.getProjectMembers(
+      user.organizationId as string,
+      req.params.id as string
+    );
+
+    return res.status(statusCodes.OK).json({
+      success: true,
+      data: members,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+//ADD PROJECT MEMBER
+const addProjectMember = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const user = req.user!;
+
+    const member = await projectService.addProjectMember(
+      user.organizationId as string,
+      req.params.id as string,
+      req.body
+    );
+
+    return res.status(statusCodes.CREATED).json({
+      success: true,
+      message: 'Project member added successfully',
+      data: member,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+//REMOVE PROJECT MEMBER
+const removeProjectMember = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const user = req.user!;
+
+    const result = await projectService.removeProjectMember(
+      user.organizationId as string,
+      req.params.id as string,
+      req.params.userId as string
+    );
+
+    return res.status(statusCodes.OK).json({
+      success: true,
+      message: 'Project member removed successfully',
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export default {
-    createProject,
-    getProjects,
-    getProjectById,
-    updateProject,
-    deleteProject
+  createProject,
+  getProjects,
+  getProjectById,
+  updateProject,
+  deleteProject,
+
+  getProjectMembers,
+  addProjectMember,
+  removeProjectMember,
 };
