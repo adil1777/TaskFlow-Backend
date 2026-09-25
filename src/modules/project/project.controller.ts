@@ -34,11 +34,14 @@ const getProjects = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const user = req.user!;
 
+    const page = Number(req.query.page) || 1;
+    const limit = Number(req.query.limit) || 20;
+
     const result = await projectService.getProjects(
       user.organizationId as string,
       {
-        page: Number(req.query.page ?? 1),
-        limit: Number(req.query.limit ?? 20),
+        page,
+        limit,
       }
     );
 

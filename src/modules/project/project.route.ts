@@ -47,22 +47,18 @@ router.post(
 router.get(
   '/',
   requireOrgRole(OrgRole.org_admin, OrgRole.member),
-  validate(paginationSchema, 'query'),
+  validate(paginationSchema),
   projectController.getProjects
 );
 
-/*
- * Get project
- */
+//Get project
 router.get(
   '/:id',
   requireOrgRole(OrgRole.org_admin, OrgRole.member),
   projectController.getProjectById
 );
 
-/*
- * Update project
- */
+//Update project
 router.patch(
   '/:id',
   requireOrgRole(OrgRole.org_admin),
@@ -70,9 +66,7 @@ router.patch(
   projectController.updateProject
 );
 
-/*
- * Delete project
- */
+//Delete project
 router.delete(
   '/:id',
   requireOrgRole(OrgRole.org_admin),
@@ -85,18 +79,14 @@ router.delete(
 |--------------------------------------------------------------------------
 */
 
-/*
- * Get project members
- */
+//Get project members
 router.get(
   '/:id/members',
   requireOrgRole(OrgRole.org_admin, OrgRole.member),
   projectController.getProjectMembers
 );
 
-/*
- * Add project member
- */
+//Add project member
 router.post(
   '/:id/members',
   requireOrgRole(OrgRole.org_admin),
@@ -104,9 +94,7 @@ router.post(
   projectController.addProjectMember
 );
 
-/*
- * Remove project member
- */
+// Remove project member
 router.delete(
   '/:id/members/:userId',
   requireOrgRole(OrgRole.org_admin),
