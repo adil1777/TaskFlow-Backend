@@ -1,33 +1,117 @@
-import { Priority, Status } from '@prisma/client';
+import { Prisma, Status, TaskHistoryAction } from '@prisma/client';
+
 import prisma from '../../db/prisma';
+
 import {
+  AssignTaskInput,
   CreateTaskInput,
   TaskFilterInput,
+  TaskHistoryChanges,
   UpdateTaskInput,
 } from './task.types';
 
-// CREATE TASK
-const createTask = async (projectId: string, input: CreateTaskInput) => {
-  return prisma.task.create({
-    data: {
-      projectId,
-      title: input.title,
-      description: input.description,
-      status: input.status ?? Status.todo,
-      priority: input.priority ?? Priority.medium,
-      dueDate: input.dueDate,
+// PROJECT
+const findProjectForAccess = async (
+  organizationId: string,
+  projectId: string,
+  userId: string
+) => {
+  return prisma.project.findFirst({
+    where: {
+      id: projectId,
+      organizationId,
+      deletedAt: null,
+    },
+
+    select: {
+      id: true,
+      organizationId: true,
+      managerId: true,
+
+      members: {
+        where: {
+          userId,
+        },
+
+        select: {
+          userId: true,
+        },
+      },
     },
   });
 };
 
-// GET TASKS
+// TASK
+const createTask = async (
+  projectId: string,
+  createdById: string,
+  input: CreateTaskInput
+) => {
+  return prisma.$transaction(async (tx) => {
+    const task = await tx.task.create({
+      data: {
+        projectId,
+        createdById,
+
+        title: input.title,
+        description: input.description,
+
+        status: input.status ?? Status.todo,
+        priority: input.priority,
+
+        dueDate: input.dueDate ?? null,
+      },
+
+      include: {
+        createdBy: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+
+        assignments: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    await tx.taskHistory.create({
+      data: {
+        taskId: task.id,
+        userId: createdById,
+        action: TaskHistoryAction.created,
+
+        newValue: {
+          title: task.title,
+          status: task.status,
+          priority: task.priority,
+          dueDate: task.dueDate,
+        },
+      },
+    });
+
+    return task;
+  });
+};
+
+//Find all tasks
 const findTasks = async (projectId: string, filters: TaskFilterInput) => {
-  const { page, limit, status, priority, assignee, dueDateFrom, dueDateTo } =
+  const { page, limit, status, priority, assigneeId, dueDateFrom, dueDateTo } =
     filters;
 
   const skip = (page - 1) * limit;
 
-  const where = {
+  const where: Prisma.TaskWhereInput = {
     projectId,
     deletedAt: null,
 
@@ -39,10 +123,10 @@ const findTasks = async (projectId: string, filters: TaskFilterInput) => {
       priority,
     }),
 
-    ...(assignee && {
+    ...(assigneeId && {
       assignments: {
         some: {
-          userId: assignee,
+          userId: assigneeId,
         },
       },
     }),
@@ -65,6 +149,14 @@ const findTasks = async (projectId: string, filters: TaskFilterInput) => {
       where,
 
       include: {
+        createdBy: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+
         assignments: {
           include: {
             user: {
@@ -74,6 +166,17 @@ const findTasks = async (projectId: string, filters: TaskFilterInput) => {
                 email: true,
               },
             },
+          },
+
+          orderBy: {
+            assignedAt: 'asc',
+          },
+        },
+
+        _count: {
+          select: {
+            assignments: true,
+            comments: true,
           },
         },
       },
@@ -99,7 +202,7 @@ const findTasks = async (projectId: string, filters: TaskFilterInput) => {
   };
 };
 
-// FIND TASK BY ID
+//Find task by Id
 const findTaskById = async (taskId: string) => {
   return prisma.task.findUnique({
     where: {
@@ -107,7 +210,22 @@ const findTaskById = async (taskId: string) => {
     },
 
     include: {
-      project: true,
+      project: {
+        select: {
+          id: true,
+          name: true,
+          organizationId: true,
+          managerId: true,
+        },
+      },
+
+      createdBy: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
 
       assignments: {
         include: {
@@ -119,85 +237,355 @@ const findTaskById = async (taskId: string) => {
             },
           },
         },
+
+        orderBy: {
+          assignedAt: 'asc',
+        },
       },
 
-      comments: {
-        include: {
-          user: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
+      _count: {
+        select: {
+          assignments: true,
+          comments: true,
+          history: true,
         },
       },
     },
   });
 };
 
-// UPDATE TASK
-const updateTask = async (taskId: string, input: UpdateTaskInput) => {
-  return prisma.task.update({
-    where: {
-      id: taskId,
-    },
+// Update Task
+const updateTask = async (
+  taskId: string,
+  userId: string,
+  input: UpdateTaskInput
+) => {
+  return prisma.$transaction(async (tx) => {
+    // Find existing task
+    const existingTask = await tx.task.findUnique({
+      where: {
+        id: taskId,
+      },
+    });
 
-    data: {
-      ...(input.title !== undefined && {
-        title: input.title,
-      }),
+    if (!existingTask || existingTask.deletedAt) {
+      return null;
+    }
 
-      ...(input.description !== undefined && {
-        description: input.description,
-      }),
+    // Detect status / priority changes
+    const statusChanged =
+      input.status !== undefined && input.status !== existingTask.status;
 
-      ...(input.status !== undefined && {
-        status: input.status,
-      }),
+    const priorityChanged =
+      input.priority !== undefined && input.priority !== existingTask.priority;
 
-      ...(input.priority !== undefined && {
-        priority: input.priority,
-      }),
+    // Prepare general change history
+    const oldValue: TaskHistoryChanges = {};
+    const newValue: TaskHistoryChanges = {};
 
-      ...(input.dueDate !== undefined && {
-        dueDate: input.dueDate,
-      }),
-    },
+    // Title
+    if (input.title !== undefined && input.title !== existingTask.title) {
+      oldValue.title = existingTask.title;
+      newValue.title = input.title;
+    }
+    // Description
+    if (
+      input.description !== undefined &&
+      input.description !== existingTask.description
+    ) {
+      oldValue.description = existingTask.description;
+      newValue.description = input.description;
+    }
+
+    // Due Date
+    const existingDueDate = existingTask.dueDate?.getTime() ?? null;
+
+    const newDueDate =
+      input.dueDate !== undefined
+        ? (input.dueDate?.getTime() ?? null)
+        : existingDueDate;
+
+    if (input.dueDate !== undefined && newDueDate !== existingDueDate) {
+      oldValue.dueDate = existingTask.dueDate?.toISOString() ?? null;
+
+      newValue.dueDate = input.dueDate?.toISOString() ?? null;
+    }
+
+    // Update task
+    const task = await tx.task.update({
+      where: {
+        id: taskId,
+      },
+
+      data: {
+        ...(input.title !== undefined && {
+          title: input.title,
+        }),
+
+        ...(input.description !== undefined && {
+          description: input.description,
+        }),
+
+        ...(input.status !== undefined && {
+          status: input.status,
+        }),
+
+        ...(input.priority !== undefined && {
+          priority: input.priority,
+        }),
+
+        ...(input.dueDate !== undefined && {
+          dueDate: input.dueDate,
+        }),
+      },
+    });
+
+    // General update history
+    if (Object.keys(oldValue).length > 0) {
+      await tx.taskHistory.create({
+        data: {
+          taskId,
+          userId,
+          action: TaskHistoryAction.updated,
+
+          oldValue: oldValue as Prisma.InputJsonValue,
+
+          newValue: newValue as Prisma.InputJsonValue,
+        },
+      });
+    }
+    // Status change history
+    if (statusChanged) {
+      await tx.taskHistory.create({
+        data: {
+          taskId,
+          userId,
+          action: TaskHistoryAction.status_changed,
+
+          oldValue: {
+            status: existingTask.status,
+          },
+
+          newValue: {
+            status: task.status,
+          },
+        },
+      });
+    }
+
+    // Priority change history
+    if (priorityChanged) {
+      await tx.taskHistory.create({
+        data: {
+          taskId,
+          userId,
+          action: TaskHistoryAction.priority_changed,
+
+          oldValue: {
+            priority: existingTask.priority,
+          },
+
+          newValue: {
+            priority: task.priority,
+          },
+        },
+      });
+    }
+
+    return task;
   });
 };
 
-// DELETE TASK
-const softDeleteTask = async (taskId: string) => {
-  return prisma.task.update({
-    where: {
-      id: taskId,
-    },
+//Soft Delete
+const softDeleteTask = async (taskId: string, userId: string) => {
+  return prisma.$transaction(async (tx) => {
+    const task = await tx.task.update({
+      where: {
+        id: taskId,
+      },
 
-    data: {
-      deletedAt: new Date(),
-    },
+      data: {
+        deletedAt: new Date(),
+      },
+    });
+
+    await tx.taskHistory.create({
+      data: {
+        taskId,
+        userId,
+        action: TaskHistoryAction.updated,
+
+        oldValue: {
+          deletedAt: null,
+        },
+
+        newValue: {
+          deletedAt: task.deletedAt,
+        },
+      },
+    });
+
+    return task;
   });
 };
 
-// FIND ORGANIZATION MEMBER
+// ORGANIZATION MEMBER
 const findOrganizationMember = async (
   organizationId: string,
   userId: string
 ) => {
-  return prisma.orgMember.findFirst({
+  return prisma.orgMember.findUnique({
     where: {
-      organizationId,
-      userId,
+      userId_organizationId: {
+        userId,
+        organizationId,
+      },
+    },
+
+    select: {
+      id: true,
+      userId: true,
+      organizationId: true,
+      role: true,
     },
   });
 };
 
-// CREATE ASSIGNMENT
-const createAssignment = async (taskId: string, userId: string) => {
-  return prisma.taskAssignment.create({
-    data: {
+// PROJECT MEMBER
+const findProjectMember = async (projectId: string, userId: string) => {
+  return prisma.projectMember.findUnique({
+    where: {
+      projectId_userId: {
+        projectId,
+        userId,
+      },
+    },
+
+    select: {
+      id: true,
+      projectId: true,
+      userId: true,
+    },
+  });
+};
+
+// TASK ASSIGNMENT
+const findAssignment = async (taskId: string, userId: string) => {
+  return prisma.taskAssignment.findUnique({
+    where: {
+      taskId_userId: {
+        taskId,
+        userId,
+      },
+    },
+
+    select: {
+      id: true,
+      taskId: true,
+      userId: true,
+      assignedById: true,
+      assignedAt: true,
+    },
+  });
+};
+
+//Create Assignment
+const createAssignment = async (
+  taskId: string,
+  userId: string,
+  assignedById: string
+) => {
+  return prisma.$transaction(async (tx) => {
+    const assignment = await tx.taskAssignment.create({
+      data: {
+        taskId,
+        userId,
+        assignedById,
+      },
+
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+
+        task: {
+          select: {
+            id: true,
+            title: true,
+            projectId: true,
+          },
+        },
+      },
+    });
+
+    await tx.taskHistory.create({
+      data: {
+        taskId,
+        userId: assignedById,
+        action: TaskHistoryAction.assigned,
+
+        newValue: {
+          userId,
+          assignmentId: assignment.id,
+        },
+      },
+    });
+
+    return assignment;
+  });
+};
+
+const deleteAssignment = async (
+  taskId: string,
+  assigneeId: string,
+  removedById: string
+) => {
+  return prisma.$transaction(async (tx) => {
+    const assignment = await tx.taskAssignment.findUnique({
+      where: {
+        taskId_userId: {
+          taskId,
+          userId: assigneeId,
+        },
+      },
+    });
+
+    if (!assignment) {
+      return null;
+    }
+
+    await tx.taskAssignment.delete({
+      where: {
+        id: assignment.id,
+      },
+    });
+
+    await tx.taskHistory.create({
+      data: {
+        taskId,
+        userId: removedById,
+        action: TaskHistoryAction.unassigned,
+
+        oldValue: {
+          userId: assigneeId,
+          assignmentId: assignment.id,
+        },
+      },
+    });
+
+    return assignment;
+  });
+};
+
+// TASK HISTORY
+const findTaskHistory = async (taskId: string) => {
+  return prisma.taskHistory.findMany({
+    where: {
       taskId,
-      userId,
     },
 
     include: {
@@ -208,77 +596,29 @@ const createAssignment = async (taskId: string, userId: string) => {
           email: true,
         },
       },
-
-      task: {
-        select: {
-          id: true,
-          title: true,
-        },
-      },
-    },
-  });
-};
-
-// FIND ASSIGNMENT
-const findAssignment = async (taskId: string, userId: string) => {
-  return prisma.taskAssignment.findUnique({
-    where: {
-      taskId_userId: {
-        taskId,
-        userId,
-      },
-    },
-  });
-};
-
-// DELETE ASSIGNMENT
-const deleteAssignment = async (taskId: string, assigneeId: string) => {
-  return prisma.taskAssignment.delete({
-    where: {
-      taskId_userId: {
-        taskId,
-        userId: assigneeId,
-      },
-    },
-  });
-};
-
-//FIND PROJECT BY ID
-const findProjectById = async (projectId: string) => {
-  return prisma.project.findUnique({
-    where: {
-      id: projectId,
-    },
-  });
-};
-
-//FIND TASK WITH ORGANIZATION
-const findTaskWithOrganization = async (taskId: string) => {
-  return prisma.task.findUnique({
-    where: {
-      id: taskId,
     },
 
-    include: {
-      project: {
-        select: {
-          organizationId: true,
-        },
-      },
+    orderBy: {
+      createdAt: 'desc',
     },
   });
 };
 
 export default {
+  findProjectForAccess,
+
   createTask,
   findTasks,
   findTaskById,
   updateTask,
   softDeleteTask,
+
   findOrganizationMember,
-  createAssignment,
+  findProjectMember,
+
   findAssignment,
+  createAssignment,
   deleteAssignment,
-  findProjectById,
-  findTaskWithOrganization,
+
+  findTaskHistory,
 };

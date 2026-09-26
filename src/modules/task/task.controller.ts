@@ -1,19 +1,20 @@
 import { Request, Response, NextFunction } from 'express';
+
 import taskService from './task.service';
+import { taskFilterSchema } from './task.validation';
+
 import statusCodes from '../../utils/statusCodes';
 import messages from '../../utils/messages';
-import { TaskFilterInput } from './task.types';
-import { taskFilterSchema } from './task.validation';
-import { parseTaskFilters } from '../../utils/task.parser';
+import { AppError } from '../../utils/error';
 
-//CREATE TASK
 const createTask = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const user = req.user!;
 
     const task = await taskService.createTask(
-      user.organizationId,
+      user.organizationId!,
       req.params.projectId as string,
+      user.id,
       req.body
     );
 
@@ -27,37 +28,53 @@ const createTask = async (req: Request, res: Response, next: NextFunction) => {
   }
 };
 
-//GET TASKS WITH FILTERS
 const getTasks = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const user = req.user!;
 
-    const filters = parseTaskFilters(req.query);
+    const parsed = taskFilterSchema.safeParse(req.query);
+
+    if (!parsed.success) {
+      throw new AppError(
+        parsed.error.issues[0]?.message ?? 'Invalid task filters',
+        'VALIDATION_ERROR',
+        statusCodes.BAD_REQUEST
+      );
+    }
 
     const result = await taskService.getTasks(
-      user.organizationId,
+      user.organizationId!,
       req.params.projectId as string,
-      filters
+      user.id,
+      parsed.data
     );
 
     res.status(statusCodes.OK).json({
       success: true,
       message: messages.TASKS_FETCHED,
-      ...result,
+
+      data: result.data,
+
+      meta: {
+        total: result.total,
+        page: result.page,
+        limit: result.limit,
+        totalPages: Math.ceil(result.total / result.limit),
+      },
     });
   } catch (error) {
     next(error);
   }
 };
 
-//GET TASK BY ID
 const getTaskById = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const user = req.user!;
 
     const task = await taskService.getTaskById(
-      user.organizationId,
-      req.params.id as string
+      user.organizationId!,
+      req.params.id as string,
+      user.id
     );
 
     res.status(statusCodes.OK).json({
@@ -70,14 +87,14 @@ const getTaskById = async (req: Request, res: Response, next: NextFunction) => {
   }
 };
 
-//UPDATE TASK
 const updateTask = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const user = req.user!;
 
     const task = await taskService.updateTask(
-      user.organizationId,
+      user.organizationId!,
       req.params.id as string,
+      user.id,
       req.body
     );
 
@@ -91,14 +108,14 @@ const updateTask = async (req: Request, res: Response, next: NextFunction) => {
   }
 };
 
-//DELETE TASK
 const deleteTask = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const user = req.user!;
 
     const result = await taskService.deleteTask(
-      user.organizationId,
-      req.params.id as string
+      user.organizationId!,
+      req.params.id as string,
+      user.id
     );
 
     res.status(statusCodes.OK).json({
@@ -111,13 +128,12 @@ const deleteTask = async (req: Request, res: Response, next: NextFunction) => {
   }
 };
 
-//ASSIGN TASK
 const assignTask = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const user = req.user!;
 
-    const assignment = await taskService.assignTask(
-      user.organizationId,
+    const result = await taskService.assignTask(
+      user.organizationId!,
       req.params.id as string,
       user.id,
       req.body
@@ -126,14 +142,13 @@ const assignTask = async (req: Request, res: Response, next: NextFunction) => {
     res.status(statusCodes.CREATED).json({
       success: true,
       message: messages.TASK_ASSIGNED,
-      data: assignment,
+      data: result,
     });
   } catch (error) {
     next(error);
   }
 };
 
-//UNASSIGNED TASK
 const unassignTask = async (
   req: Request,
   res: Response,
@@ -143,14 +158,38 @@ const unassignTask = async (
     const user = req.user!;
 
     await taskService.unassignTask(
-      user.organizationId,
+      user.organizationId!,
       req.params.id as string,
-      req.params.userId as string
+      req.params.userId as string,
+      user.id
     );
 
     res.status(statusCodes.OK).json({
       success: true,
       message: messages.TASK_UNASSIGNED,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getTaskHistory = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const user = req.user!;
+
+    const history = await taskService.getTaskHistory(
+      user.organizationId!,
+      req.params.id as string,
+      user.id
+    );
+
+    res.status(statusCodes.OK).json({
+      success: true,
+      data: history,
     });
   } catch (error) {
     next(error);
@@ -163,6 +202,9 @@ export default {
   getTaskById,
   updateTask,
   deleteTask,
+
   assignTask,
   unassignTask,
+
+  getTaskHistory,
 };

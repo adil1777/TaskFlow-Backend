@@ -1,48 +1,88 @@
+import { OrgRole, Prisma } from '@prisma/client';
+
 import { notificationQueue } from '../../queues/notification.queue';
+
 import { AppError } from '../../utils/error';
 import messages from '../../utils/messages';
 import statusCodes from '../../utils/statusCodes';
+
 import taskRepository from './task.repository';
 
 import {
+  AssignTaskInput,
   CreateTaskInput,
   TaskFilterInput,
   UpdateTaskInput,
-  AssignTaskInput,
 } from './task.types';
 
-// CREATE TASK
-const createTask = async (
+// AUTHORIZED PROJECT
+const getAuthorizedProject = async (
   organizationId: string,
   projectId: string,
-  input: CreateTaskInput
+  userId: string,
+  requireManagement = false
 ) => {
   try {
-    await getAuthorizedProject(organizationId, projectId);
+    const project = await taskRepository.findProjectForAccess(
+      organizationId,
+      projectId,
+      userId
+    );
 
-    return await taskRepository.createTask(projectId, input);
+    if (!project) {
+      throw new AppError(
+        messages.PROJECT_NOT_FOUND,
+        'PROJECT_NOT_FOUND',
+        statusCodes.NOT_FOUND
+      );
+    }
+
+    const organizationMember = await taskRepository.findOrganizationMember(
+      organizationId,
+      userId
+    );
+
+    const isOrgAdmin = organizationMember?.role === OrgRole.org_admin;
+
+    const isProjectManager = project.managerId === userId;
+
+    const isProjectMember = project.members.length > 0;
+
+    if (requireManagement) {
+      if (!isOrgAdmin && !isProjectManager) {
+        throw new AppError(
+          'You do not have permission to manage this project',
+          'PROJECT_MANAGEMENT_FORBIDDEN',
+          statusCodes.FORBIDDEN
+        );
+      }
+    } else {
+      if (!isOrgAdmin && !isProjectManager && !isProjectMember) {
+        throw new AppError(
+          'You are not a member of this project',
+          'PROJECT_ACCESS_FORBIDDEN',
+          statusCodes.FORBIDDEN
+        );
+      }
+    }
+
+    return {
+      project,
+      isOrgAdmin,
+      isProjectManager,
+      isProjectMember,
+    };
   } catch (error) {
     throw error;
   }
 };
 
-// GET TASKS
-const getTasks = async (
+// AUTHORIZED TASK
+const getAuthorizedTask = async (
   organizationId: string,
-  projectId: string,
-  filters: TaskFilterInput
+  taskId: string,
+  userId: string
 ) => {
-  try {
-    await getAuthorizedProject(organizationId, projectId);
-
-    return await taskRepository.findTasks(projectId, filters);
-  } catch (error) {
-    throw error;
-  }
-};
-
-// GET TASK BY ID
-const getTaskById = async (organizationId: string, taskId: string) => {
   try {
     const task = await taskRepository.findTaskById(taskId);
 
@@ -62,6 +102,62 @@ const getTaskById = async (organizationId: string, taskId: string) => {
       );
     }
 
+    const projectAccess = await getAuthorizedProject(
+      organizationId,
+      task.project.id,
+      userId
+    );
+
+    return {
+      task,
+      ...projectAccess,
+    };
+  } catch (error) {
+    throw error;
+  }
+};
+
+// CREATE TASK
+const createTask = async (
+  organizationId: string,
+  projectId: string,
+  userId: string,
+  input: CreateTaskInput
+) => {
+  try {
+    await getAuthorizedProject(organizationId, projectId, userId, true);
+
+    return taskRepository.createTask(projectId, userId, input);
+  } catch (error) {
+    throw error;
+  }
+};
+
+// GET TASKS
+const getTasks = async (
+  organizationId: string,
+  projectId: string,
+  userId: string,
+  filters: TaskFilterInput
+) => {
+  try {
+    await getAuthorizedProject(organizationId, projectId, userId);
+
+    return taskRepository.findTasks(projectId, filters);
+  } catch (error) {
+    throw error;
+  }
+};
+
+// GET TASK BY ID
+const getTaskById = async (
+  organizationId: string,
+  taskId: string,
+  userId: string
+) => {
+  try {
+    const { task } = await getAuthorizedTask(organizationId, taskId, userId);
+
     return task;
   } catch (error) {
     throw error;
@@ -72,26 +168,91 @@ const getTaskById = async (organizationId: string, taskId: string) => {
 const updateTask = async (
   organizationId: string,
   taskId: string,
+  userId: string,
   input: UpdateTaskInput
 ) => {
   try {
-    await getTaskById(organizationId, taskId);
+    const { task, isOrgAdmin, isProjectManager } = await getAuthorizedTask(
+      organizationId,
+      taskId,
+      userId
+    );
 
-    return await taskRepository.updateTask(taskId, input);
+    const canManageTask = isOrgAdmin || isProjectManager;
+
+    if (!canManageTask) {
+      const isAssigned = task.assignments.some(
+        (assignment) => assignment.user.id === userId
+      );
+
+      if (!isAssigned) {
+        throw new AppError(
+          'You do not have permission to update this task',
+          'TASK_UPDATE_FORBIDDEN',
+          statusCodes.FORBIDDEN
+        );
+      }
+
+      /*
+       * Normal project members who are assigned
+       * to a task can update only its status.
+       */
+      const hasRestrictedChanges =
+        input.title !== undefined ||
+        input.description !== undefined ||
+        input.priority !== undefined ||
+        input.dueDate !== undefined;
+
+      if (hasRestrictedChanges) {
+        throw new AppError(
+          'Assigned users can only update task status',
+          'TASK_UPDATE_FORBIDDEN',
+          statusCodes.FORBIDDEN
+        );
+      }
+    }
+
+    const updatedTask = await taskRepository.updateTask(taskId, userId, input);
+
+    if (!updatedTask) {
+      throw new AppError(
+        messages.TASK_NOT_FOUND,
+        'TASK_NOT_FOUND',
+        statusCodes.NOT_FOUND
+      );
+    }
+
+    return updatedTask;
   } catch (error) {
     throw error;
   }
 };
 
 // DELETE TASK
-const deleteTask = async (organizationId: string, taskId: string) => {
+const deleteTask = async (
+  organizationId: string,
+  taskId: string,
+  userId: string
+) => {
   try {
-    await getTaskById(organizationId, taskId);
+    const { isOrgAdmin, isProjectManager } = await getAuthorizedTask(
+      organizationId,
+      taskId,
+      userId
+    );
 
-    await taskRepository.softDeleteTask(taskId);
+    if (!isOrgAdmin && !isProjectManager) {
+      throw new AppError(
+        'You do not have permission to delete this task',
+        'TASK_DELETE_FORBIDDEN',
+        statusCodes.FORBIDDEN
+      );
+    }
+
+    await taskRepository.softDeleteTask(taskId, userId);
 
     return {
-      message: messages.TASK_DELETED,
+      id: taskId,
     };
   } catch (error) {
     throw error;
@@ -102,71 +263,133 @@ const deleteTask = async (organizationId: string, taskId: string) => {
 const assignTask = async (
   organizationId: string,
   taskId: string,
-  assignedBy: string,
+  assignedById: string,
   input: AssignTaskInput
 ) => {
-  //Verify task belongs to organization
-  await getTaskById(organizationId, taskId);
-
-  // Verify assignee belongs to organization
-  const member = await taskRepository.findOrganizationMember(
-    organizationId,
-    input.assigneeId
-  );
-
-  if (!member) {
-    throw new AppError(
-      'User does not belong to this organization',
-      'USER_NOT_IN_ORGANIZATION',
-      statusCodes.FORBIDDEN
-    );
-  }
-
-  // Persist assignment
-  const assignment = await taskRepository.createAssignment(
-    taskId,
-    input.assigneeId
-  );
-
   try {
-    // Enqueue notification
-    const job = await notificationQueue.add('task-assigned', {
-      assignmentId: assignment.id,
+    const { task, isOrgAdmin, isProjectManager } = await getAuthorizedTask(
+      organizationId,
+      taskId,
+      assignedById
+    );
 
-      taskId: assignment.task.id,
-
-      taskTitle: assignment.task.title,
-
-      userId: assignment.user.id,
-
-      userEmail: assignment.user.email,
-
-      userName: assignment.user.name,
-
-      assignedBy,
-    });
-
-    // Both operations succeeded
-    return {
-      assignment,
-      jobId: job.id,
-    };
-  } catch (error) {
-    //Queue failed → rollback DB assignment
-    try {
-      await taskRepository.deleteAssignment(assignment.id, input.assigneeId);
-    } catch (rollbackError) {
-      console.error('[ASSIGNMENT] Failed to rollback assignment', {
-        assignmentId: assignment.id,
-        rollbackError,
-      });
+    if (!isOrgAdmin && !isProjectManager) {
+      throw new AppError(
+        'You do not have permission to assign tasks',
+        'TASK_ASSIGN_FORBIDDEN',
+        statusCodes.FORBIDDEN
+      );
     }
 
-    throw new AppError(
-      'Failed to queue task notification',
-      'NOTIFICATION_QUEUE_FAILED',
-      statusCodes.INTERNAL_SERVER_ERROR
+    /*
+     * Assignee must be an explicit project member.
+     */
+    const projectMember = await taskRepository.findProjectMember(
+      task.project.id,
+      input.assigneeId
     );
+
+    if (!projectMember) {
+      throw new AppError(
+        'User must be a member of the project before being assigned a task',
+        'USER_NOT_PROJECT_MEMBER',
+        statusCodes.FORBIDDEN
+      );
+    }
+
+    const existingAssignment = await taskRepository.findAssignment(
+      taskId,
+      input.assigneeId
+    );
+
+    if (existingAssignment) {
+      throw new AppError(
+        'Task is already assigned to this user',
+        'TASK_ALREADY_ASSIGNED',
+        statusCodes.CONFLICT
+      );
+    }
+
+    let assignment;
+
+    try {
+      assignment = await taskRepository.createAssignment(
+        taskId,
+        input.assigneeId,
+        assignedById
+      );
+    } catch (error) {
+      /*
+       * Database unique constraint is the final
+       * protection against concurrent duplicate requests.
+       */
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new AppError(
+          'Task is already assigned to this user',
+          'TASK_ALREADY_ASSIGNED',
+          statusCodes.CONFLICT
+        );
+      }
+
+      throw error;
+    }
+
+    /*
+     * Assignment is already committed.
+     *
+     * Notification is asynchronous and should not
+     * invalidate the business operation.
+     */
+    try {
+      const job = await notificationQueue.add(
+        'task-assigned',
+        {
+          assignmentId: assignment.id,
+          taskId: assignment.task.id,
+          taskTitle: assignment.task.title,
+          userId: assignment.user.id,
+          userEmail: assignment.user.email,
+          userName: assignment.user.name,
+          assignedBy: assignedById,
+        },
+        {
+          attempts: 5,
+
+          backoff: {
+            type: 'exponential',
+            delay: 2000,
+          },
+
+          removeOnComplete: 100,
+          removeOnFail: false,
+        }
+      );
+
+      return {
+        assignment,
+        jobId: job.id,
+      };
+    } catch (error) {
+      /*
+       * Do not rollback assignment.
+       * Notification can be retried/recovered separately.
+       */
+      console.error('[TASK_ASSIGNMENT] Failed to enqueue notification', {
+        assignmentId: assignment.id,
+        taskId,
+        error,
+      });
+
+      return {
+        assignment,
+        jobId: null,
+      };
+    }
+  } catch (error) {
+    throw error;
   }
 };
 
@@ -174,10 +397,23 @@ const assignTask = async (
 const unassignTask = async (
   organizationId: string,
   taskId: string,
-  assigneeId: string
+  assigneeId: string,
+  removedById: string
 ) => {
   try {
-    await getTaskById(organizationId, taskId);
+    const { isOrgAdmin, isProjectManager } = await getAuthorizedTask(
+      organizationId,
+      taskId,
+      removedById
+    );
+
+    if (!isOrgAdmin && !isProjectManager) {
+      throw new AppError(
+        'You do not have permission to unassign tasks',
+        'TASK_UNASSIGN_FORBIDDEN',
+        statusCodes.FORBIDDEN
+      );
+    }
 
     const assignment = await taskRepository.findAssignment(taskId, assigneeId);
 
@@ -185,41 +421,26 @@ const unassignTask = async (
       throw new AppError(
         messages.ASSIGNMENT_NOT_FOUND,
         'ASSIGNMENT_NOT_FOUND',
-        statusCodes.BAD_REQUEST
+        statusCodes.NOT_FOUND
       );
     }
 
-    await taskRepository.deleteAssignment(taskId, assigneeId);
+    await taskRepository.deleteAssignment(taskId, assigneeId, removedById);
   } catch (error) {
     throw error;
   }
 };
 
-// AUTHORIZED PROJECT
-const getAuthorizedProject = async (
+// TASK HISTORY
+const getTaskHistory = async (
   organizationId: string,
-  projectId: string
+  taskId: string,
+  userId: string
 ) => {
   try {
-    const project = await taskRepository.findProjectById(projectId);
+    await getAuthorizedTask(organizationId, taskId, userId);
 
-    if (!project || project.deletedAt) {
-      throw new AppError(
-        'Project not found',
-        'PROJECT_NOT_FOUND',
-        statusCodes.NOT_FOUND
-      );
-    }
-
-    if (project.organizationId !== organizationId) {
-      throw new AppError(
-        'You do not have access to this project',
-        'FORBIDDEN',
-        403
-      );
-    }
-
-    return project;
+    return taskRepository.findTaskHistory(taskId);
   } catch (error) {
     throw error;
   }
@@ -231,7 +452,9 @@ export default {
   getTaskById,
   updateTask,
   deleteTask,
+
   assignTask,
   unassignTask,
-  getAuthorizedProject,
+
+  getTaskHistory,
 };
