@@ -452,15 +452,20 @@ const findOrganizationMember = async (
 };
 
 // PROJECT MEMBER
-const findProjectMember = async (projectId: string, userId: string) => {
-  return prisma.projectMember.findUnique({
+const findProjectMember = async (
+  projectId: string,
+  organizationId: string,
+  userId: string
+) => {
+  return prisma.projectMember.findFirst({
     where: {
-      projectId_userId: {
-        projectId,
-        userId,
+      projectId,
+      userId,
+      project: {
+        organizationId,
+        deletedAt: null,
       },
     },
-
     select: {
       id: true,
       projectId: true,

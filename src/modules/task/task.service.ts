@@ -46,7 +46,9 @@ const getAuthorizedProject = async (
 
     const isProjectManager = project.managerId === userId;
 
-    const isProjectMember = project.members.length > 0;
+    const isProjectMember = project.members.some(
+      (member) => member.userId === userId
+    );
 
     if (requireManagement) {
       if (!isOrgAdmin && !isProjectManager) {
@@ -286,6 +288,7 @@ const assignTask = async (
      */
     const projectMember = await taskRepository.findProjectMember(
       task.project.id,
+      organizationId,
       input.assigneeId
     );
 
