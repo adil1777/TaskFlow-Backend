@@ -47,7 +47,6 @@ router.post(
 router.get(
   '/',
   requireOrgRole(OrgRole.org_admin, OrgRole.member),
-  validate(paginationSchema),
   projectController.getProjects
 );
 
