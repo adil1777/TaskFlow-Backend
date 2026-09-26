@@ -2,78 +2,151 @@
 
 A production-oriented, multi-tenant project management backend built as part of a Backend Developer Technical Assignment.
 
-TaskFlow allows users to belong to organizations, create and manage projects, manage tasks, assign work, add comments, and receive asynchronous task-assignment notifications.
+TaskFlow provides organization-based project management with secure multi-tenant access, role-based authorization, project membership, task management, task assignments, comments, task history, and asynchronous task-assignment notifications.
 
-The project focuses on secure multi-tenant access, organization-level RBAC, PostgreSQL database design, clean architecture, background job processing, validation, error handling, and Dockerized deployment.
+The backend focuses on production-oriented backend engineering practices including:
+
+* Multi-tenant data isolation
+* Organization and project-level authorization
+* Layered architecture
+* PostgreSQL relational data modeling
+* Prisma ORM and migrations
+* Redis and BullMQ background processing
+* Retry and dead-letter queue handling
+* Request validation with Zod
+* Centralized error handling
+* Authentication rate limiting
+* Soft deletion
+* Dockerized local development and deployment
 
 ---
+
 # 🌐 Deployment
 
 The backend is deployed on Render.
 
 ## 🚀 Live API
 
-**Base URL:**  
+**Base URL**
+
 https://taskflow-backend-nqwe.onrender.com
 
-**Health Check API:**  
-[https://taskflow-backend-nqwe.onrender.com/health](https://taskflow-backend-nqwe.onrender.com/health)
+**Health Check**
 
+https://taskflow-backend-nqwe.onrender.com/health
+
+**API Base Path**
+
+```text
+/api/v1
+```
+
+Example:
+
+```text
+https://taskflow-backend-nqwe.onrender.com/api/v1/projects
+```
 
 ---
 
-## 🛠️ Tech Stack
+# 🛠️ Tech Stack
 
-| Technology | Purpose |
-|------------|---------|
-| Node.js | Runtime |
-| TypeScript | Programming Language |
-| Express.js | REST API Framework |
-| PostgreSQL | Primary Database |
-| Prisma | ORM |
-| Redis | Queue Backend |
-| BullMQ | Background Job Processing |
-| JWT | Authentication |
-| bcrypt | Password Hashing |
-| Zod | Request Validation |
-| Docker | Containerization |
-| Docker Compose | Multi-Service Environment |
+| Technology     | Purpose                         |
+| -------------- | ------------------------------- |
+| Node.js        | Runtime                         |
+| TypeScript     | Programming language            |
+| Express.js     | REST API framework              |
+| PostgreSQL     | Primary relational database     |
+| Prisma         | ORM and database migrations     |
+| Redis          | Queue backend                   |
+| BullMQ         | Background job processing       |
+| JWT            | Authentication                  |
+| bcrypt         | Password hashing                |
+| Zod            | Request validation              |
+| Docker         | Containerization                |
+| Docker Compose | Local multi-service environment |
 
 ---
 
 # ✨ Features
 
-- JWT authentication
-- Access and refresh token authentication
-- Secure password hashing using bcrypt
-- Organization-level RBAC
-- Strict multi-tenant data isolation
-- Project CRUD
-- Task CRUD
-- Task filtering
-- Offset pagination
-- Task assignment and unassignment
-- Comments CRUD
-- Project dashboard with task counts
-- Redis + BullMQ background jobs
-- Asynchronous task-assignment notifications
-- Job retry with exponential backoff
-- Dead-letter queue
-- Job status tracking
-- PostgreSQL migrations
-- Seed data
-- Soft delete for projects and tasks
-- PostgreSQL full-text search
-- Zod request validation
-- Centralized error handling
-- Authentication rate limiting
-- Dockerized API, Worker, PostgreSQL and Redis
+## Authentication
+
+* User registration
+* User login
+* JWT access tokens
+* Refresh tokens
+* Refresh-token persistence and revocation
+* Secure password hashing using bcrypt
+* Authentication rate limiting
+
+## Multi-Tenant Organizations
+
+* Organization creation
+* Organization membership
+* Organization-level roles
+* Strict organization isolation
+* Multiple users per organization
+
+## Projects
+
+* Project CRUD
+* Project manager
+* Project membership
+* Organization-scoped project access
+* Project-level authorization
+* Soft deletion
+
+## Tasks
+
+* Task CRUD
+* Task status management
+* Task priority management
+* Task filtering
+* PostgreSQL full-text search
+* Offset pagination
+* Due-date filtering
+* Task assignments
+* Task history
+* Soft deletion
+
+## Comments
+
+* Create comments
+* Read comments
+* Update own comments
+* Delete own comments
+* Organization/project authorization
+
+## Dashboard
+
+* Project-level task statistics
+* Task counts grouped by status
+
+## Background Processing
+
+* Redis + BullMQ
+* Asynchronous task-assignment notifications
+* Retry with exponential backoff
+* Dead-letter queue
+* Job status tracking
+* Separate worker process
+
+## Engineering
+
+* Prisma migrations
+* Seed data
+* Zod validation
+* Centralized error handling
+* Database constraints
+* Dockerized API and worker
+* PostgreSQL and Redis services
 
 ---
 
 # 🏗️ Architecture
 
-TaskFlow follows a clean layered architecture:
+TaskFlow follows a layered backend architecture.
 
 ```text
 Client
@@ -87,11 +160,19 @@ Routes
    ▼
 Middleware
    │
+   ├── Authentication
+   ├── RBAC
+   ├── Validation
+   └── Rate Limiting
+   │
    ▼
 Controller
    │
    ▼
 Service
+   │
+   ▼
+Repository
    │
    ▼
 Prisma ORM
@@ -100,86 +181,217 @@ Prisma ORM
 PostgreSQL
 ```
 
-### Background Job Architecture
+The service layer is responsible for business rules and authorization decisions.
+
+The repository layer is responsible for database access.
+
+This keeps HTTP handling, business logic, and persistence concerns separated.
+
+---
+
+# ⚙️ Background Job Architecture
+
+Task assignment notifications are processed asynchronously.
 
 ```text
-Client
-   │
-   ▼
-API
-   │
-   ├── Persist Task Assignment
-   │
-   └── Enqueue Notification Job
-              │
-              ▼
-           BullMQ
-              │
-              ▼
-            Redis
-              │
-              ▼
-           Worker
-              │
-              ▼
-       Email Notification
+                    ┌──────────────────┐
+                    │      Client      │
+                    └────────┬─────────┘
+                             │
+                             ▼
+                    ┌──────────────────┐
+                    │    Express API   │
+                    └────────┬─────────┘
+                             │
+                  Create Task Assignment
+                             │
+                             ▼
+                    ┌──────────────────┐
+                    │   BullMQ Queue   │
+                    └────────┬─────────┘
+                             │
+                             ▼
+                    ┌──────────────────┐
+                    │      Redis       │
+                    └────────┬─────────┘
+                             │
+                             ▼
+                    ┌──────────────────┐
+                    │ Notification     │
+                    │ Worker            │
+                    └────────┬─────────┘
+                             │
+                             ▼
+                    ┌──────────────────┐
+                    │ Notification     │
+                    │ Processor        │
+                    └──────────────────┘
 ```
 
-The worker runs independently from the API process so email processing does not block API requests.
+The worker runs independently from the API process.
+
+This prevents notification processing from blocking normal API requests.
 
 ---
 
 # 🔐 Multi-Tenant Security
 
-One of the most important requirements of this assignment is strict organization-level isolation.
+TaskFlow treats organization isolation as a core security boundary.
 
-> A user from Organization A must never be able to read, update, or delete Organization B's projects, even if they know the project ID.
+A user authenticated in Organization A must not be able to access Organization B resources, even if the user knows the resource ID.
 
-The application enforces organization-level authorization at the service layer.
+Authorization is enforced on the server.
 
-The organization context is obtained from the authenticated user's JWT.
+Client-provided organization identifiers are not trusted for authorization decisions.
 
-Client-provided `organizationId` values are never trusted.
+The authenticated user's organization membership is used to establish organization access.
 
-### Example
+Example:
 
 ```text
 Organization A
-    │
-    └── User A
-          │
-          │ JWT
-          ▼
-     organizationId = A
-          │
-          ▼
-     Request Project B
-          │
-          ▼
-     Project.organizationId = B
-          │
-          ▼
-        A != B
-          │
-          ▼
-    403 Forbidden
+      │
+      ▼
+    User A
+      │
+      ▼
+Authenticated Request
+      │
+      ▼
+Organization Context = A
+      │
+      ▼
+Request Project B
+      │
+      ▼
+Project.organizationId = B
+      │
+      ▼
+A !== B
+      │
+      ▼
+403 Forbidden
 ```
 
-The same tenant-isolation strategy is applied to:
+The same security model is applied across:
 
-- Projects
-- Tasks
-- Task assignments
-- Comments
-- Organization members
+* Organizations
+* Projects
+* Project members
+* Tasks
+* Task assignments
+* Comments
+* Task history
 
-This prevents cross-organization data access even when a valid resource ID is known.
+---
+
+# 👥 Authorization Model
+
+TaskFlow uses two levels of authorization.
+
+## System Role
+
+Users have a global system role:
+
+```text
+system_admin
+user
+```
+
+## Organization Role
+
+Organization membership has an organization-scoped role:
+
+```text
+org_admin
+member
+```
+
+Project access is controlled separately through project membership and project manager assignment.
+
+```text
+User
+ │
+ ├── Organization Membership
+ │       └── org_admin / member
+ │
+ └── Project Membership
+         └── Project Member
+```
+
+This avoids treating every organization member as automatically having access to every project.
+
+---
+
+# 🔑 Organization Permissions
+
+## `org_admin`
+
+Organization administrators can:
+
+* Manage organization membership
+* Create projects
+* Update projects
+* Delete projects
+* Assign project managers
+* Manage project membership
+* Access organization projects
+
+## `member`
+
+Organization members can access projects and tasks according to their project membership and project-level permissions.
+
+A member does not automatically gain access to every project in the organization.
+
+---
+
+# 📁 Project Permissions
+
+Project access is determined using:
+
+* Organization membership
+* Project manager assignment
+* Project membership
+
+### Project Manager
+
+A project manager can:
+
+* View the project
+* Update the project
+* Manage project members
+* Create tasks
+* Update tasks
+* Delete tasks
+* Assign tasks
+* Unassign tasks
+
+### Project Member
+
+A project member can:
+
+* View the project
+* View project tasks
+* Create tasks according to the application's authorization rules
+* View task history
+* Add comments
+* Update their own comments
+* Delete their own comments
+* Update an assigned task's status where permitted
+
+### Organization Admin
+
+An organization administrator has organization-wide administrative access to projects and their associated resources.
+
+Authorization is enforced server-side and is not dependent on frontend UI visibility.
 
 ---
 
 # 🗄️ Database Design
 
-PostgreSQL is used as the primary database.
+PostgreSQL is the primary database.
+
+The database is modeled around organizations, memberships, projects, tasks, assignments, comments, authentication sessions, notifications, and audit history.
 
 ## Main Tables
 
@@ -188,71 +400,115 @@ users
 organizations
 org_members
 projects
+project_members
 tasks
 task_assignments
 comments
+task_history
+refresh_tokens
+notifications
 ```
 
-### Entity Relationship
+## Entity Relationship
 
 ```text
-Users
-  │
-  ├───────────────┐
-  │               │
-  ▼               ▼
-org_members   task_assignments
-  │               │
-  ▼               ▼
-organizations   tasks
+                         ┌─────────────────┐
+                         │      User       │
+                         └────────┬────────┘
+                                  │
+                ┌─────────────────┼──────────────────┐
+                │                 │                  │
+                ▼                 ▼                  ▼
+          OrgMember        ProjectMember       RefreshToken
+                │                 │
+                ▼                 │
+        Organization             │
+                │                 │
+                ▼                 ▼
+             Project ◄──────── ProjectMember
+                │
+                ▼
+              Task
+                │
+        ┌───────┼───────────┐
+        │       │           │
+        ▼       ▼           ▼
+ Assignment  Comment    TaskHistory
+        │       │           │
+        └───────┴───────────┘
+                │
+                ▼
+              User
+```
+
+---
+
+# 🧩 Prisma Data Model
+
+Important relationships include:
+
+```text
+Organization
+    │
+    ├── OrgMember
+    │       └── User
+    │
+    └── Project
+            │
+            ├── ProjectMember
+            │       └── User
+            │
+            └── Task
                     │
-                    ├──────────────┐
-                    │              │
-                    ▼              ▼
-                 projects       comments
-                    │              │
-                    ▼              ▼
-              organizations       users
+                    ├── TaskAssignment
+                    │       └── User
+                    │
+                    ├── Comment
+                    │       └── User
+                    │
+                    └── TaskHistory
+                            └── User
 ```
 
-## PostgreSQL Enums
+Database constraints are used to enforce important invariants.
 
-### Status
+For example:
 
 ```text
-todo
-in_progress
-review
-done
+User + Organization
+        ↓
+unique membership
 ```
-
-### Priority
 
 ```text
-low
-medium
-high
-urgent
+Project + User
+        ↓
+unique project membership
 ```
-
-### Organization Role
 
 ```text
-org_admin
-member
+Task + User
+        ↓
+unique task assignment
 ```
 
-Database changes are managed using Prisma migration files.
+This prevents duplicate memberships and assignments at the database level.
 
 ---
 
 # 🗑️ Soft Delete
 
-Projects and tasks support soft deletion using the `deleted_at` field.
+Projects and tasks support soft deletion through:
 
-Instead of immediately removing the record from the database, the record is marked as deleted.
+```text
+deletedAt
+```
 
-This helps preserve historical data and provides safer data management.
+Instead of physically deleting the record, the application marks it as deleted.
+
+Soft-deleted projects and tasks are excluded from normal application queries.
+
+This preserves historical records and provides safer data management.
 
 ---
 
@@ -260,22 +516,19 @@ This helps preserve historical data and provides safer data management.
 
 Task title and description support PostgreSQL full-text search.
 
-This allows users to search tasks using PostgreSQL without requiring an external search service.
+This allows task searching to be performed by PostgreSQL without introducing an external search engine.
 
 ---
 
 # 🔑 Authentication
 
-Authentication is implemented using JWT.
+Authentication is implemented using JWT access tokens and persistent refresh tokens.
 
 ## Access Token
 
-- JWT based
-- 15-minute TTL
-- Contains authenticated user and organization context
-- Includes organization role
+The access token is short-lived and contains the authenticated user's identity and required authorization context.
 
-Example payload:
+Example:
 
 ```json
 {
@@ -285,12 +538,16 @@ Example payload:
 }
 ```
 
+The backend does not rely solely on JWT claims for authorization. Organization membership and resource ownership are validated server-side.
+
 ## Refresh Token
 
-- 7-day TTL
-- Stored in PostgreSQL
-- Supports revocation
-- Used to generate new access tokens
+Refresh tokens:
+
+* Are long-lived compared with access tokens
+* Are persisted in PostgreSQL
+* Support revocation
+* Are used to issue new access tokens
 
 ## Password Security
 
@@ -298,7 +555,9 @@ Passwords are hashed using bcrypt with a cost factor of at least 12.
 
 ## Authentication Rate Limiting
 
-Authentication endpoints are protected with IP-based rate limiting:
+Authentication endpoints are protected using IP-based rate limiting.
+
+Current configuration:
 
 ```text
 10 requests / minute / IP
@@ -306,59 +565,69 @@ Authentication endpoints are protected with IP-based rate limiting:
 
 ---
 
-# 👥 Role-Based Access Control
-
-TaskFlow supports two organization roles.
-
-## `org_admin`
-
-Organization administrators can:
-
-- Manage organization members
-- Create projects
-- Update projects
-- Delete projects
-- Perform administrative operations
-
-## `member`
-
-Organization members can:
-
-- Access resources belonging to their organization
-- Create and manage tasks according to their permissions
-- Assign tasks
-- Add comments
-- Update their own comments
-
-Authorization is enforced using the authenticated user's organization and role.
-
----
-
 # 🔐 Authentication API
+
+All API routes use the `/api/v1` prefix.
 
 ## Register
 
 ```http
-POST /auth/register
+POST /api/v1/auth/register
 ```
 
 ## Login
 
 ```http
-POST /auth/login
+POST /api/v1/auth/login
 ```
 
 ## Refresh Token
 
 ```http
-POST /auth/refresh
+POST /api/v1/auth/refresh
 ```
 
 ## Logout
 
 ```http
-POST /auth/logout
+POST /api/v1/auth/logout
 ```
+
+---
+
+# 🏢 Organization API
+
+## Create Organization
+
+```http
+POST /api/v1/organizations
+```
+
+Creating an organization establishes the creator as an organization administrator.
+
+## Get Organization
+
+```http
+GET /api/v1/organizations/:organizationId
+```
+
+## Update Organization
+
+```http
+PATCH /api/v1/organizations/:organizationId
+```
+
+## Delete Organization
+
+```http
+DELETE /api/v1/organizations/:organizationId
+```
+
+## Organization Members
+
+Organization membership is managed through organization-scoped APIs.
+
+All membership operations verify organization access before modifying membership data.
 
 ---
 
@@ -367,34 +636,48 @@ POST /auth/logout
 ## Create Project
 
 ```http
-POST /projects
+POST /api/v1/projects
 ```
 
 ## Get Projects
 
 ```http
-GET /projects
+GET /api/v1/projects
 ```
 
 ## Get Project
 
 ```http
-GET /projects/:id
+GET /api/v1/projects/:projectId
 ```
 
 ## Update Project
 
 ```http
-PATCH /projects/:id
+PATCH /api/v1/projects/:projectId
 ```
 
 ## Delete Project
 
 ```http
-DELETE /projects/:id
+DELETE /api/v1/projects/:projectId
 ```
 
-Project queries are always scoped to the authenticated user's organization.
+## Project Members
+
+```http
+GET /api/v1/projects/:projectId/members
+```
+
+```http
+POST /api/v1/projects/:projectId/members
+```
+
+```http
+DELETE /api/v1/projects/:projectId/members/:userId
+```
+
+Project queries are organization-scoped and additionally enforce project-level access.
 
 ---
 
@@ -403,63 +686,75 @@ Project queries are always scoped to the authenticated user's organization.
 ## Create Task
 
 ```http
-POST /projects/:projectId/tasks
+POST /api/v1/projects/:projectId/tasks
 ```
 
 ## Get Tasks
 
 ```http
-GET /projects/:projectId/tasks
+GET /api/v1/projects/:projectId/tasks
 ```
 
 ## Get Task
 
 ```http
-GET /tasks/:id
+GET /api/v1/tasks/:id
 ```
 
 ## Update Task
 
 ```http
-PATCH /tasks/:id
+PATCH /api/v1/tasks/:id
 ```
 
 ## Delete Task
 
 ```http
-DELETE /tasks/:id
+DELETE /api/v1/tasks/:id
 ```
 
-Every task must belong to a project within the authenticated user's organization.
+Every task belongs to a project, and every project belongs to an organization.
+
+The service layer validates the complete resource chain before performing authorization-sensitive operations.
+
+```text
+Organization
+      │
+      ▼
+   Project
+      │
+      ▼
+     Task
+```
 
 ---
 
 # 🔍 Task Filters
 
-Tasks can be filtered by:
+Tasks support filtering by:
 
-- Status
-- Priority
-- Assignee
-- Due-date range
-- Search text
+* Status
+* Priority
+* Assignee
+* Due-date range
+* Search text
 
-Example:
+Examples:
 
 ```http
-GET /projects/:projectId/tasks?status=in_progress
+GET /api/v1/projects/:projectId/tasks?status=in_progress
 ```
 
 ```http
-GET /projects/:projectId/tasks?priority=high
+GET /api/v1/projects/:projectId/tasks?priority=high
 ```
 
 ```http
-GET /projects/:projectId/tasks?assignee=user-id
+GET /api/v1/projects/:projectId/tasks?assignee=user-id
 ```
 
 ```http
-GET /projects/:projectId/tasks?dueDateFrom=2026-08-01&dueDateTo=2026-08-31
+GET /api/v1/projects/:projectId/tasks?dueDateFrom=2026-08-01&dueDateTo=2026-08-31
 ```
 
 ---
@@ -471,10 +766,10 @@ Offset-based pagination is supported.
 Example:
 
 ```http
-GET /projects/:projectId/tasks?page=1&limit=20
+GET /api/v1/projects/:projectId/tasks?page=1&limit=20
 ```
 
-Response:
+Example response:
 
 ```json
 {
@@ -492,7 +787,7 @@ Response:
 ## Assign User
 
 ```http
-POST /tasks/:id/assign
+POST /api/v1/tasks/:id/assign
 ```
 
 Request:
@@ -503,22 +798,57 @@ Request:
 }
 ```
 
-The assigned user must belong to the same organization as the task.
+The assigned user must satisfy the project's membership requirements.
+
+The service validates the task, project, organization, and target project membership before creating the assignment.
+
+Duplicate assignments are prevented by a database-level unique constraint.
 
 ## Unassign User
 
 ```http
-DELETE /tasks/:id/assign/:userId
+DELETE /api/v1/tasks/:id/assign/:userId
 ```
 
-Duplicate assignments are prevented using database constraints.
+---
+
+# 📜 Task History
+
+Task changes are tracked through the `TaskHistory` model.
+
+Tracked events include:
+
+```text
+created
+updated
+status_changed
+priority_changed
+assigned
+unassigned
+comment_added
+```
+
+Example:
+
+```text
+Task
+ │
+ ├── Created
+ ├── Status changed
+ ├── Priority changed
+ ├── User assigned
+ ├── Comment added
+ └── User unassigned
+```
+
+This provides an audit trail for important task activity.
 
 ---
 
 # 📊 Project Dashboard
 
 ```http
-GET /projects/:projectId/dashboard
+GET /api/v1/projects/:projectId/dashboard
 ```
 
 The dashboard returns task counts grouped by status.
@@ -534,6 +864,8 @@ Example:
 }
 ```
 
+Dashboard data is scoped to the requested project and authenticated user's organization.
+
 ---
 
 # 💬 Comments
@@ -541,7 +873,7 @@ Example:
 ## Create Comment
 
 ```http
-POST /tasks/:taskId/comments
+POST /api/v1/tasks/:taskId/comments
 ```
 
 Request:
@@ -555,75 +887,84 @@ Request:
 ## Get Comments
 
 ```http
-GET /tasks/:taskId/comments
+GET /api/v1/tasks/:taskId/comments
 ```
 
 ## Update Comment
 
 ```http
-PATCH /comments/:id
+PATCH /api/v1/comments/:id
 ```
 
 ## Delete Comment
 
 ```http
-DELETE /comments/:id
+DELETE /api/v1/comments/:id
 ```
 
-Comments are organization-scoped through their associated task and project.
+Comments inherit organization and project authorization through their associated task.
 
 Users can only modify their own comments.
+
+Comment creation also records a `comment_added` event in task history.
 
 ---
 
 # ⚙️ Background Jobs
 
-Task assignment notifications are processed asynchronously using Redis and BullMQ.
+Task-assignment notifications are processed asynchronously using BullMQ and Redis.
 
 When a user is assigned to a task:
 
 ```text
-1. Validate task
-2. Validate organization
-3. Validate assigned user
-4. Persist assignment
-5. Enqueue notification job
-6. Return successful response
-7. Worker processes notification asynchronously
+1. Validate request
+2. Validate task and project
+3. Validate organization access
+4. Validate project membership
+5. Create task assignment
+6. Enqueue notification job
+7. Return API response
+8. Worker processes notification asynchronously
 ```
 
-The API does not wait for email processing to complete.
+The current notification processor uses a mock email sender for demonstration and testing.
 
-A mock email sender is used for the assignment notification.
+A real email provider can be integrated behind the notification processor in a production environment.
 
 ---
 
 # 🔄 Retry Strategy
 
-Notification jobs use 3 retry attempts.
+Notification jobs use:
 
-Exponential backoff:
+```text
+3 attempts
+```
+
+with exponential backoff.
 
 ```text
 Attempt 1
-   │
-   └── 1 second
-        │
-        ▼
+    │
+    └── wait 1 second
+           │
+           ▼
 Attempt 2
-   │
-   └── 2 seconds
-        │
-        ▼
+    │
+    └── wait 2 seconds
+           │
+           ▼
 Attempt 3
-   │
-   └── 4 seconds
-        │
-        ▼
+    │
+    └── wait 4 seconds
+           │
+           ▼
 Dead Letter Queue
 ```
 
-After all retry attempts are exhausted, the failed job is moved to the dead-letter queue.
+After the configured retry attempts are exhausted, the failed job is copied to the dead-letter queue.
+
+The DLQ provides a mechanism for investigating failed background jobs without silently losing them.
 
 ---
 
@@ -632,7 +973,7 @@ After all retry attempts are exhausted, the failed job is moved to the dead-lett
 ## Get Job Status
 
 ```http
-GET /jobs/:id
+GET /api/v1/jobs/:id
 ```
 
 Supported statuses:
@@ -644,35 +985,43 @@ completed
 failed
 ```
 
-Example response:
+Example:
 
 ```json
 {
-  "jobId": "job-id",
-  "status": "completed",
-  "metadata": {
-    "attemptsMade": 1,
-    "maxAttempts": 3
+  "success": true,
+  "data": {
+    "jobId": "job-id",
+    "status": "completed",
+    "metadata": {
+      "name": "task-assigned",
+      "attemptsMade": 1,
+      "maxAttempts": 3,
+      "createdAt": 1750000000000,
+      "processedOn": 1750000001000,
+      "finishedOn": 1750000001500,
+      "failedReason": null
+    }
   }
 }
 ```
 
+BullMQ job records are retained according to the queue's cleanup policy. Therefore, an old completed job may no longer be available through the job-status endpoint.
+
 ---
 
-# 🔄 Assignment & Queue Consistency
+# 🔄 Assignment and Queue Reliability
 
-The assignment endpoint needs to ensure that the database assignment and notification job do not become inconsistent.
-
-The implemented strategy is:
+The assignment workflow separates durable business data from asynchronous processing.
 
 ```text
 Validate Request
       │
       ▼
-Validate Task + Organization
+Validate Task / Project / Organization
       │
       ▼
-Validate Assigned User
+Validate Project Membership
       │
       ▼
 Create Task Assignment
@@ -680,28 +1029,34 @@ Create Task Assignment
       ▼
 Enqueue Notification Job
       │
-      ├── Success → Return Success
+      ├── Success
       │
-      └── Failure → Rollback Assignment
+      └── Queue Failure
 ```
 
-This prevents a task assignment from remaining in the database when the notification job could not be queued.
+The task assignment is stored as durable PostgreSQL data, while the notification is handled asynchronously by BullMQ.
 
-For a larger distributed production system, the Transactional Outbox Pattern could be used as a further improvement.
+Because PostgreSQL and Redis/BullMQ are separate systems, a standard database transaction cannot atomically commit both operations.
+
+For a larger distributed production system, the **Transactional Outbox Pattern** is the recommended evolution.
+
+The outbox pattern would allow the database transaction and event creation to be committed atomically, after which a worker publishes/processes the notification event reliably.
 
 ---
 
 # ❌ Error Handling
 
-The application uses centralized error handling with consistent API responses.
+TaskFlow uses centralized error handling and consistent application error types.
 
 Example:
 
 ```json
 {
-  "error": "Task not found",
-  "code": "TASK_NOT_FOUND",
-  "details": {}
+  "success": false,
+  "error": {
+    "message": "Task not found",
+    "code": "TASK_NOT_FOUND"
+  }
 }
 ```
 
@@ -716,6 +1071,8 @@ TASK_NOT_FOUND
 COMMENT_NOT_FOUND
 USER_NOT_FOUND
 USER_NOT_IN_ORGANIZATION
+PROJECT_ACCESS_FORBIDDEN
+ORGANIZATION_ACCESS_FORBIDDEN
 TASK_ALREADY_ASSIGNED
 JOB_NOT_FOUND
 ```
@@ -724,23 +1081,27 @@ JOB_NOT_FOUND
 
 # ✔️ Request Validation
 
-Zod is used to validate:
+Zod is used to validate incoming request data.
 
-- Request bodies
-- Route parameters
-- Query parameters
+Validation is applied to:
 
-Invalid requests are rejected before reaching the service layer.
+* Request bodies
+* Route parameters
+* Query parameters
+
+Invalid requests are rejected before reaching business logic.
+
+This keeps validation rules explicit and prevents malformed input from reaching the service layer.
 
 ---
 
-# 🐳 Docker
+# 🐳 Docker Architecture
 
-Docker Compose runs all required services:
+Docker Compose provides the local multi-service environment.
 
 ```text
 ┌─────────────────┐
-│      API        │
+│       API       │
 └────────┬────────┘
          │
          ├───────────────┐
@@ -749,15 +1110,17 @@ Docker Compose runs all required services:
    PostgreSQL          Redis
                          │
                          ▼
-                       Worker
+                      Worker
 ```
 
 Services:
 
-- API
-- Worker
-- PostgreSQL
-- Redis
+* API
+* Worker
+* PostgreSQL
+* Redis
+
+The API and worker run as separate processes so background processing does not block HTTP request handling.
 
 ---
 
@@ -765,12 +1128,12 @@ Services:
 
 ## Prerequisites
 
-Make sure the following are installed:
+Install:
 
-- Node.js
-- npm
-- Docker
-- Docker Compose
+* Node.js
+* npm
+* Docker
+* Docker Compose
 
 ---
 
@@ -811,6 +1174,10 @@ ACCESS_TOKEN_EXPIRES_IN=15m
 REFRESH_TOKEN_EXPIRES_IN=7d
 ```
 
+Do not commit real secrets to Git.
+
+Use `.env.example` for documenting required environment variables.
+
 ---
 
 # 🗃️ Database Setup
@@ -821,7 +1188,7 @@ Generate Prisma Client:
 npx prisma generate
 ```
 
-Run migrations:
+Run development migrations:
 
 ```bash
 npx prisma migrate dev
@@ -839,6 +1206,12 @@ Check migration status:
 npx prisma migrate status
 ```
 
+For production deployments:
+
+```bash
+npx prisma migrate deploy
+```
+
 ---
 
 # ▶️ Run Locally
@@ -854,6 +1227,8 @@ Start the worker in a separate terminal:
 ```bash
 npm run worker
 ```
+
+The API and worker should use the same PostgreSQL and Redis configuration.
 
 ---
 
@@ -881,74 +1256,113 @@ docker compose down -v
 
 # 🌱 Seed Data
 
-The database seed contains:
+The seed database contains representative data for testing:
 
-- 2 organizations
-- 5 users
-- Multiple projects
-- 10+ tasks
-- Tasks distributed across projects
-- Different task statuses
-- Different priorities
-- Task assignments
-- Sample comments
+* Multiple organizations
+* Users
+* Organization memberships
+* Projects
+* Project memberships
+* Tasks
+* Different task statuses
+* Different priorities
+* Task assignments
+* Sample comments
 
 The seed data can be used to test:
 
-- Authentication
-- RBAC
-- Multi-tenant isolation
-- Projects
-- Tasks
-- Assignments
-- Comments
-- Dashboard functionality
+* Authentication
+* RBAC
+* Multi-tenant isolation
+* Project access
+* Project membership
+* Tasks
+* Assignments
+* Comments
+* Dashboard functionality
 
 ---
 
-# 🧪 Testing & Security Scenarios
+# 🧪 Testing and Security Scenarios
 
-Important scenarios to verify include:
+The following scenarios should be verified before deployment.
 
-### Cross-Tenant Project Access
+## Cross-Tenant Project Access
 
 ```text
 Organization A User
-        ↓
+        │
+        ▼
 Organization B Project ID
-        ↓
+        │
+        ▼
 403 Forbidden
 ```
 
-### Cross-Tenant Task Access
+## Cross-Tenant Task Access
 
 ```text
 Organization A User
-        ↓
+        │
+        ▼
 Organization B Task ID
-        ↓
+        │
+        ▼
 403 Forbidden
 ```
 
-### Cross-Tenant Comment Access
+## Cross-Tenant Comment Access
 
 ```text
 Organization A User
-        ↓
+        │
+        ▼
 Organization B Comment ID
-        ↓
+        │
+        ▼
 403 Forbidden
 ```
 
-### RBAC
+## Project Membership
+
+```text
+Organization Member
+        │
+        ▼
+Project A
+        │
+        ▼
+Not a Project Member
+        │
+        ▼
+Project access denied
+```
+
+## Project Manager Authorization
+
+```text
+Project Manager
+        │
+        ▼
+Task Management
+        │
+        ├── Create
+        ├── Update
+        ├── Delete
+        └── Assign
+```
+
+## Organization RBAC
 
 Member attempting to delete a project:
 
 ```text
 member
-  ↓
-DELETE /projects/:id
-  ↓
+  │
+  ▼
+DELETE /api/v1/projects/:id
+  │
+  ▼
 403 Forbidden
 ```
 
@@ -956,9 +1370,11 @@ Organization administrator:
 
 ```text
 org_admin
-  ↓
+  │
+  ▼
 DELETE own organization project
-  ↓
+  │
+  ▼
 Success
 ```
 
@@ -968,79 +1384,62 @@ Success
 
 The application implements:
 
-- Organization-level tenant isolation
-- JWT authentication
-- Short-lived access tokens
-- Refresh-token persistence and revocation
-- bcrypt password hashing
-- Organization-level RBAC
-- Service-layer organization scoping
-- Zod input validation
-- Authentication rate limiting
-- Centralized error handling
-- Same-organization validation for task assignments
-- Database constraints
-- Soft deletion for projects and tasks
+* Organization-level tenant isolation
+* Organization membership validation
+* Project-level membership authorization
+* JWT authentication
+* Short-lived access tokens
+* Refresh-token persistence and revocation
+* bcrypt password hashing
+* Organization-level RBAC
+* Service-layer authorization
+* Zod input validation
+* Authentication rate limiting
+* Centralized error handling
+* Same-project validation for task assignments
+* Database-level uniqueness constraints
+* Soft deletion for projects and tasks
+* Cross-tenant resource protection
+
+The backend does not rely on frontend authorization for security.
+
+Every protected resource is validated server-side.
 
 ---
 
-# 📦 Project Structure
+# 📈 Production Considerations
+
+The current implementation is designed to demonstrate production-oriented backend fundamentals.
+
+For a larger production deployment, additional infrastructure could include:
 
 ```text
-TaskFlow-Backend/
-│
-├── prisma/
-│   ├── migrations/
-│   ├── schema.prisma
-│   └── seed.ts
-│
-├── src/
-│   ├── config/
-│   │   └── serverConfig.ts
-│   │
-│   ├── constants/
-│   │   └── role.ts
-│   │
-│   ├── db/
-│   │   └── prisma.ts
-│   │
-│   ├── middlewares/
-│   │   ├── auth.middleware.ts
-│   │   ├── role.middleware.ts
-│   │   ├── error.middleware.ts
-│   │   └── rateLimit.middleware.ts
-│   │
-│   ├── modules/
-│   │   ├── auth/
-│   │   ├── projects/
-│   │   ├── tasks/
-│   │   ├── comments/
-│   │   └── jobs/
-│   │
-│   ├── queues/
-│   │   ├── redis.ts
-│   │   ├── notification.queue.ts
-│   │   ├── dead-letter.queue.ts
-│   │   └── notification.types.ts
-│   │
-│   ├── workers/
-│   │   └── notification.worker.ts
-│   │
-│   ├── utils/
-│   │   └── errors.ts
-│   │
-│   ├── app.ts
-│   └── server.ts
-│
-├── Dockerfile
-├── docker-compose.yml
-├── prisma.config.ts
-├── package.json
-├── tsconfig.json
-├── .env.example
-├── .gitignore
-└── README.md
+Load Balancer
+      │
+      ▼
+Multiple API Instances
+      │
+      ├────────── PostgreSQL
+      │
+      ├────────── Redis
+      │
+      └────────── Multiple Workers
 ```
+
+Additional operational improvements could include:
+
+* Centralized structured logging
+* Metrics collection
+* Application monitoring
+* Distributed tracing
+* Database connection pooling
+* Redis monitoring
+* Queue monitoring
+* Automated CI/CD
+* Automated integration tests
+* End-to-end tests
+* Secret management
+* Health/readiness probes
 
 ---
 
@@ -1048,15 +1447,57 @@ TaskFlow-Backend/
 
 Potential improvements for a larger production environment:
 
-- Transactional Outbox Pattern
-- Refresh-token rotation
-- Logout from all devices
-- Global email rate limiting
-- Comprehensive integration and end-to-end tests
-- Swagger / OpenAPI documentation
-- Real email provider integration
-- Monitoring and centralized logging
-- Distributed tracing
+* Transactional Outbox Pattern
+* Refresh-token rotation
+* Logout from all devices
+* Real email provider integration
+* Notification persistence and read/unread APIs
+* Comprehensive integration tests
+* End-to-end tests
+* Swagger / OpenAPI documentation
+* Structured logging
+* Monitoring and alerting
+* Distributed tracing
+* CI/CD pipeline
+* Queue monitoring
+* Advanced audit logging
 
 ---
 
+# 📌 Engineering Principles
+
+TaskFlow follows several backend engineering principles:
+
+### 1. Security First
+
+Authorization is enforced server-side and scoped to the organization and project.
+
+### 2. Separation of Concerns
+
+Controllers handle HTTP concerns, services handle business logic, and repositories handle persistence.
+
+### 3. Database Constraints
+
+Important invariants are enforced at the database level wherever possible.
+
+### 4. Asynchronous Processing
+
+Non-critical background work is moved to BullMQ workers instead of blocking API requests.
+
+### 5. Failure Handling
+
+Background jobs use retries, exponential backoff, and a dead-letter queue.
+
+### 6. Explicit Validation
+
+External input is validated using Zod before entering business logic.
+
+### 7. Evolution Toward Distributed Reliability
+
+The current queue architecture can evolve toward a Transactional Outbox Pattern when stronger database-to-message delivery guarantees are required.
+
+---
+
+# 📄 License
+
+This project was created as part of a Backend Developer Technical Assignment.
