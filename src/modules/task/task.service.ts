@@ -347,29 +347,15 @@ const assignTask = async (
      * invalidate the business operation.
      */
     try {
-      const job = await notificationQueue.add(
-        'task-assigned',
-        {
-          assignmentId: assignment.id,
-          taskId: assignment.task.id,
-          taskTitle: assignment.task.title,
-          userId: assignment.user.id,
-          userEmail: assignment.user.email,
-          userName: assignment.user.name,
-          assignedBy: assignedById,
-        },
-        {
-          attempts: 5,
-
-          backoff: {
-            type: 'exponential',
-            delay: 2000,
-          },
-
-          removeOnComplete: 100,
-          removeOnFail: false,
-        }
-      );
+      const job = await notificationQueue.add('task-assigned', {
+        assignmentId: assignment.id,
+        taskId: assignment.task.id,
+        taskTitle: assignment.task.title,
+        userId: assignment.user.id,
+        userEmail: assignment.user.email,
+        userName: assignment.user.name,
+        assignedBy: assignedById,
+      });
 
       return {
         assignment,
