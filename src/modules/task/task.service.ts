@@ -460,4 +460,5 @@ export default {
   unassignTask,
 
   getTaskHistory,
+  getAuthorizedProject,
 };

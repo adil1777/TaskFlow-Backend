@@ -1,8 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
+
 import dashboardService from './dashboard.service';
 import statusCodes from '../../utils/statusCodes';
 
-//PROJECT DASHBOARD with task counts grouped by status
 const getProjectDashboard = async (
   req: Request,
   res: Response,
@@ -12,16 +12,17 @@ const getProjectDashboard = async (
     const user = req.user!;
 
     const dashboard = await dashboardService.getProjectDashboard(
-      user.organizationId,
-      req.params.projectId as string
+      user.organizationId as string,
+      req.params.projectId as string,
+      user.id
     );
 
-    res.status(statusCodes.OK).json({
+    return res.status(statusCodes.OK).json({
       success: true,
       data: dashboard,
     });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 };
 
