@@ -1,17 +1,15 @@
+import { OrgRole } from '@prisma/client';
+
 import { AppError } from '../../utils/error';
-
 import messages from '../../utils/messages';
-
 import statusCodes from '../../utils/statusCodes';
 
 import { createCommentInput, updateCommentInput } from './comment.types';
 
 import commentRepository from './comment.repository';
-
 import taskRepository from '../task/task.repository';
 
 // CREATE COMMENT
-
 const createComment = async (
   organizationId: string,
   userId: string,
@@ -19,7 +17,7 @@ const createComment = async (
   input: createCommentInput
 ) => {
   try {
-    await getAuthorizedTask(organizationId, taskId);
+    await getAuthorizedTask(organizationId, taskId, userId);
 
     return await commentRepository.createComment(taskId, userId, input.content);
   } catch (error) {
@@ -28,10 +26,13 @@ const createComment = async (
 };
 
 // GET COMMENTS
-
-const getComments = async (organizationId: string, taskId: string) => {
+const getComments = async (
+  organizationId: string,
+  taskId: string,
+  userId: string
+) => {
   try {
-    await getAuthorizedTask(organizationId, taskId);
+    await getAuthorizedTask(organizationId, taskId, userId);
 
     return await commentRepository.findCommentsByTaskId(taskId);
   } catch (error) {
@@ -47,7 +48,11 @@ const updateComment = async (
   input: updateCommentInput
 ) => {
   try {
-    const comment = await getAuthorizedComment(organizationId, commentId);
+    const comment = await getAuthorizedComment(
+      organizationId,
+      commentId,
+      userId
+    );
 
     // Only comment owner can update
     if (comment.user.id !== userId) {
@@ -71,7 +76,11 @@ const deleteComment = async (
   commentId: string
 ) => {
   try {
-    const comment = await getAuthorizedComment(organizationId, commentId);
+    const comment = await getAuthorizedComment(
+      organizationId,
+      commentId,
+      userId
+    );
 
     // Only comment owner can delete
     if (comment.user.id !== userId) {
@@ -83,13 +92,21 @@ const deleteComment = async (
     }
 
     await commentRepository.deleteComment(commentId);
+
+    return {
+      id: commentId,
+    };
   } catch (error) {
     throw error;
   }
 };
 
 // AUTHORIZED TASK
-const getAuthorizedTask = async (organizationId: string, taskId: string) => {
+const getAuthorizedTask = async (
+  organizationId: string,
+  taskId: string,
+  userId: string
+) => {
   try {
     const task = await taskRepository.findTaskWithOrganization(taskId);
 
@@ -101,10 +118,53 @@ const getAuthorizedTask = async (organizationId: string, taskId: string) => {
       );
     }
 
+    // Organization isolation.
     if (task.project.organizationId !== organizationId) {
       throw new AppError(
         'You do not have access to this task',
         'FORBIDDEN',
+        statusCodes.FORBIDDEN
+      );
+    }
+
+    // Get organization membership.
+    const organizationMember = await taskRepository.findOrganizationMember(
+      organizationId,
+      userId
+    );
+
+    if (!organizationMember) {
+      throw new AppError(
+        'You are not a member of this organization',
+        'ORGANIZATION_ACCESS_FORBIDDEN',
+        statusCodes.FORBIDDEN
+      );
+    }
+
+    /*
+     * Organization admin has access
+     * to all projects in the organization.
+     */
+    if (organizationMember.role === OrgRole.org_admin) {
+      return task;
+    }
+
+    // Project manager has access.
+    if (task.project.managerId === userId) {
+      return task;
+    }
+
+    // Project member has access.
+    const projectMember = await taskRepository.findProjectMember(
+      task.project.id,
+      organizationId,
+      userId
+    );
+
+    if (!projectMember) {
+      throw new AppError(
+        'You are not a member of this project',
+        'PROJECT_ACCESS_FORBIDDEN',
         statusCodes.FORBIDDEN
       );
     }
@@ -118,7 +178,8 @@ const getAuthorizedTask = async (organizationId: string, taskId: string) => {
 // AUTHORIZED COMMENT
 const getAuthorizedComment = async (
   organizationId: string,
-  commentId: string
+  commentId: string,
+  userId: string
 ) => {
   try {
     const comment = await commentRepository.findCommentById(commentId);
@@ -131,6 +192,7 @@ const getAuthorizedComment = async (
       );
     }
 
+    // Organization isolation
     if (comment.task.project.organizationId !== organizationId) {
       throw new AppError(
         'You do not have access to this comment',
@@ -138,6 +200,18 @@ const getAuthorizedComment = async (
         statusCodes.FORBIDDEN
       );
     }
+
+    // Comment belongs to an active task
+    if (comment.task.deletedAt) {
+      throw new AppError(
+        messages.TASK_NOT_FOUND,
+        'TASK_NOT_FOUND',
+        statusCodes.NOT_FOUND
+      );
+    }
+
+    //Verify project/task access
+    await getAuthorizedTask(organizationId, comment.taskId, userId);
 
     return comment;
   } catch (error) {

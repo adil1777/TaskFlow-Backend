@@ -609,6 +609,29 @@ const findTaskHistory = async (taskId: string) => {
   });
 };
 
+// GET TASK WITH ORGANIZATION
+const findTaskWithOrganization = async (taskId: string) => {
+  return prisma.task.findUnique({
+    where: {
+      id: taskId,
+    },
+
+    select: {
+      id: true,
+      deletedAt: true,
+
+      project: {
+        select: {
+          id: true,
+          organizationId: true,
+          managerId: true,
+          deletedAt: true,
+        },
+      },
+    },
+  });
+};
+
 export default {
   findProjectForAccess,
 
@@ -626,4 +649,5 @@ export default {
   deleteAssignment,
 
   findTaskHistory,
+  findTaskWithOrganization,
 };

@@ -1,4 +1,5 @@
 import prisma from '../../db/prisma';
+import { TaskHistoryAction } from '@prisma/client';
 
 // CREATE COMMENT
 const createComment = async (
@@ -6,22 +7,37 @@ const createComment = async (
   userId: string,
   content: string
 ) => {
-  return prisma.comment.create({
-    data: {
-      taskId,
-      userId,
-      content,
-    },
+  return prisma.$transaction(async (tx) => {
+    const comment = await tx.comment.create({
+      data: {
+        taskId,
+        userId,
+        content,
+      },
 
-    include: {
-      user: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
         },
       },
-    },
+    });
+
+    await tx.taskHistory.create({
+      data: {
+        taskId,
+        userId,
+        action: TaskHistoryAction.comment_added,
+        newValue: {
+          commentId: comment.id,
+        },
+      },
+    });
+
+    return comment;
   });
 };
 
@@ -32,7 +48,14 @@ const findCommentsByTaskId = async (taskId: string) => {
       taskId,
     },
 
-    include: {
+    select: {
+      id: true,
+      taskId: true,
+      userId: true,
+      content: true,
+      createdAt: true,
+      updatedAt: true,
+
       user: {
         select: {
           id: true,
@@ -54,12 +77,25 @@ const findCommentById = async (commentId: string) => {
       id: commentId,
     },
 
-    include: {
+    select: {
+      id: true,
+      taskId: true,
+      userId: true,
+      content: true,
+      createdAt: true,
+      updatedAt: true,
+
       task: {
-        include: {
+        select: {
+          id: true,
+          deletedAt: true,
+
           project: {
             select: {
+              id: true,
               organizationId: true,
+              managerId: true,
+              deletedAt: true,
             },
           },
         },
@@ -87,7 +123,14 @@ const updateComment = async (commentId: string, content: string) => {
       content,
     },
 
-    include: {
+    select: {
+      id: true,
+      taskId: true,
+      userId: true,
+      content: true,
+      createdAt: true,
+      updatedAt: true,
+
       user: {
         select: {
           id: true,

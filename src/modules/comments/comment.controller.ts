@@ -1,10 +1,11 @@
 import { Request, Response, NextFunction } from 'express';
 
 import commentService from './comment.service';
+
 import statusCodes from '../../utils/statusCodes';
 import messages from '../../utils/messages';
 
-//CREATE COMMENT
+// CREATE COMMENT
 const createComment = async (
   req: Request,
   res: Response,
@@ -14,7 +15,7 @@ const createComment = async (
     const user = req.user!;
 
     const comment = await commentService.createComment(
-      user.organizationId,
+      user.organizationId!,
       user.id,
       req.params.taskId as string,
       req.body
@@ -30,14 +31,15 @@ const createComment = async (
   }
 };
 
-//GET COMMENTS
+// GET COMMENTS
 const getComments = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const user = req.user!;
 
     const comments = await commentService.getComments(
-      user.organizationId,
-      req.params.taskId as string
+      user.organizationId!,
+      req.params.taskId as string,
+      user.id
     );
 
     res.status(statusCodes.OK).json({
@@ -50,7 +52,7 @@ const getComments = async (req: Request, res: Response, next: NextFunction) => {
   }
 };
 
-//UPDATE COMMENT
+// UPDATE COMMENT
 const updateComment = async (
   req: Request,
   res: Response,
@@ -60,7 +62,7 @@ const updateComment = async (
     const user = req.user!;
 
     const comment = await commentService.updateComment(
-      user.organizationId,
+      user.organizationId!,
       user.id,
       req.params.id as string,
       req.body
@@ -76,7 +78,7 @@ const updateComment = async (
   }
 };
 
-//DELET COMMENT
+// DELETE COMMENT
 const deleteComment = async (
   req: Request,
   res: Response,
@@ -86,7 +88,7 @@ const deleteComment = async (
     const user = req.user!;
 
     const result = await commentService.deleteComment(
-      user.organizationId,
+      user.organizationId!,
       user.id,
       req.params.id as string
     );
