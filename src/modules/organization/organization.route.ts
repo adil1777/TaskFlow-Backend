@@ -85,6 +85,7 @@ router.get(
 // Add member
 router.post(
   '/:organizationId/members',
+  requireSameOrganization,
   requireOrgRole(OrgRole.org_admin),
   validate(addOrganizationMemberSchema),
   organizationController.addOrganizationMember
@@ -93,6 +94,7 @@ router.post(
 // Update member role
 router.patch(
   '/:organizationId/members/:userId',
+  requireSameOrganization,
   requireOrgRole(OrgRole.org_admin),
   validate(updateOrganizationMemberSchema),
   organizationController.updateOrganizationMember
@@ -101,6 +103,7 @@ router.patch(
 //Remove member
 router.delete(
   '/:organizationId/members/:userId',
+  requireSameOrganization,
   requireOrgRole(OrgRole.org_admin),
   organizationController.removeOrganizationMember
 );
