@@ -25,12 +25,6 @@ const router = Router();
 
 router.use(authMiddleware);
 
-/*
-|--------------------------------------------------------------------------
-| System Admin APIs
-|--------------------------------------------------------------------------
-*/
-
 //Create organization + initial organization admin
 router.post(
   '/',
@@ -39,8 +33,8 @@ router.post(
   organizationController.createOrganization
 );
 
-//Get all organizations
-router.get('/', requireSystemAdmin, organizationController.getAllOrganizations);
+//Get Organizations
+router.get('/', organizationController.getOrganizations);
 
 //Get organization by Organization Id
 router.get(

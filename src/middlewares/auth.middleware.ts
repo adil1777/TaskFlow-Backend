@@ -67,7 +67,7 @@ export async function authMiddleware(
       );
     }
 
-    // 4. System Admin
+    // System Admin
     if (user.systemRole === SystemRole.system_admin) {
       req.user = {
         id: user.id,

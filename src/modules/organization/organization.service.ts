@@ -13,6 +13,7 @@ import {
   UpdateOrganizationInput,
   UpdateOrganizationMemeberInput,
 } from './organization.types';
+import { AuthUser } from '../auth/auth.types';
 
 const createOrganization = async (input: CreateOrganizationInput) => {
   try {
@@ -61,10 +62,24 @@ const createOrganization = async (input: CreateOrganizationInput) => {
   }
 };
 
-//Get All Organizations
-const getAllOrganizations = async () => {
+//Get Organizations
+const getOrganizations = async (user: AuthUser) => {
   try {
-    return await organizationRepository.findAllOrganizations();
+    if (user.systemRole === SystemRole.system_admin) {
+      return organizationRepository.findAllOrganizations();
+    }
+
+    const memberships = await organizationRepository.findOrganizationsByUserId(
+      user.id
+    );
+
+    return memberships.map((membership) => ({
+      id: membership.organization.id,
+      name: membership.organization.name,
+      createdAt: membership.organization.createdAt,
+      updatedAt: membership.organization.updatedAt,
+      role: membership.role,
+    }));
   } catch (error) {
     throw error;
   }
@@ -308,7 +323,7 @@ const removeOrganizationMember = async (
 
 export default {
   createOrganization,
-  getAllOrganizations,
+  getOrganizations,
   getOrganizationById,
   updateOrganization,
   deleteOrganization,

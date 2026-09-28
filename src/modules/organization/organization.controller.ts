@@ -4,6 +4,7 @@ import organizationService from './organization.service';
 
 import statusCodes from '../../utils/statusCodes';
 import messages from '../../utils/messages';
+import { AppError } from '../../utils/error';
 
 //Create  organization with org_admin
 const createOrganization = async (
@@ -24,14 +25,21 @@ const createOrganization = async (
   }
 };
 
-// Get All Organizations
-const getAllOrganizations = async (
-  _req: Request,
+// Get Organizations
+const getOrganizations = async (
+  req: Request,
   res: Response,
   next: NextFunction
 ) => {
   try {
-    const organizations = await organizationService.getAllOrganizations();
+    if (!req.user) {
+      throw new AppError(
+        'Authentication required',
+        'UNAUTHORIZED',
+        statusCodes.UNAUTHORIZED
+      );
+    }
+    const organizations = await organizationService.getOrganizations(req.user);
 
     return res.status(statusCodes.OK).json({
       success: true,
@@ -197,7 +205,7 @@ const removeOrganizationMember = async (
 
 export default {
   createOrganization,
-  getAllOrganizations,
+  getOrganizations,
   getOrganizationById,
   updateOrganization,
   deleteOrganization,

@@ -265,6 +265,32 @@ const countOrganizationAdmins = async (organizationId: string) => {
   });
 };
 
+const findOrganizationsByUserId = async (userId: string) => {
+  return prisma.orgMember.findMany({
+    where: {
+      userId,
+    },
+    orderBy: {
+      organization: {
+        createdAt: 'desc',
+      },
+    },
+    select: {
+      organizationId: true,
+      role: true,
+
+      organization: {
+        select: {
+          id: true,
+          name: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      },
+    },
+  });
+};
+
 export default {
   findUserById,
 
@@ -281,4 +307,5 @@ export default {
   updateMembershipRole,
   deleteMembership,
   countOrganizationAdmins,
+  findOrganizationsByUserId,
 };
